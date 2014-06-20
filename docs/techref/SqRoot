@@ -1,0 +1,67 @@
+Integer Square Roots in Z80 machine code
+========================================
+
+A simple way of calculating integer square roots is to count how many times
+increasing odd numbers can be subtracted from the starting value. For
+example:
+
+32-1=31 -> 31-3=28 -> 28-5=23 -> 23-7=16 -> 16-9=7 -> 7-11<0
+        1          2          3          4          5
+
+-> SQR(30)=5, remainder 7
+
+This can be done in Z80 machine code as follows. To calculate roots of
+numbers larger than 16 bits different code is needed, as the square root of
+&10000 (a 17-bit number) is &100 (a 9-bit number).
+
+; Calculate 16-bit square root
+; ----------------------------
+; On entry, HL=input value
+; On exit,  DE=corrupted
+;            A=root
+;           HL=remainder
+.sqr
+LD   DE,1         ; Initialise to first subtrand
+LD   A,D          ; Initial root=0
+.sqr_loop         ; Repeatedly subtract increasing
+AND  A            ;   odd numbers until HL<0
+SBC  HL,DE        ; HL=HL-subtrand
+JR   C,sqr_done   ; HL<0, all done
+INC  A            ; Increase root
+INC  DE
+INC  DE           ; step subtrand +2 to next odd number
+JR   sqr_loop     ; Loop to subtract next odd number
+.sqr_done
+ADD  HL,DE        ; A=root, HL=remainder
+
+You can test this in BBC BASIC by terminating the code with:
+
+LD H,L:LD L,A:EXX ; HL'=remainder*256+root
+RET
+
+and running:
+
+FOR L%=1 TO 65535:H%=L%DIV256:R%=USR sqr:PRINTL%,~R%:NEXT
+
+
+The following code calculates roots of 8-bit numbers by using an 8-bit
+counter and root. As it calculates roots of 8-bit numbers the maximum it
+will calculate is the integer square root of 255 which is 15.
+
+; Calculate 8-bit square root
+; ---------------------------
+; On entry,  A=input value
+; On exit,   A=corrupted
+;            C=corrupted
+;            B=root
+.sqr8
+LD   BC,1         ; Initialise C=first subtrand, B=SQR(0)
+.sqr8_loop        ; Repeatedly subtract increasing
+SUB  A,C          ; Subtract current odd number
+JR   C,sqr8_done  ; A<0, all done
+INC  B            ; Increase root
+INC  C
+INC  C            ; Step to next odd number
+JR   sqr8_loop    ; Loop to subtract next odd number
+.sqr8_done
+                  ; B=root

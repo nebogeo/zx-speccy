@@ -1,0 +1,283 @@
+                              Spectrum I/O map
+                              ================
+The Spectrum hardware only partially decodes some of the address lines.  The
+video/sound ULA is selected when A0 is low.  The Interface 1 microdrive and
+serial/network interface is selected with A3 and A4.  The Sinclair printer
+is selected when A2 is low, but an alternative printer interface would use
+full decoding.
+
+The Kempston joystick interface is usually selected by A5.  Some interfaces
+select with A7, A6 and A5, some interfaces fully decode address 31.
+
+This shows the full address range available if full address decoding is used
+working around the partially decoded addresses of other Spectrum hardware,
+and the addresses of hardware I have built.
+
+  76543210  Hex Dec    Input                     Output
+  11111111  FF  255    User port in              User port out
+  11111110  FE  254    Spectrum keyboard/Tape    Border/Sound/Tape
+  11111101  FD  253    Ascii keyboard data       Memory Bank Select
+  11111011  FB  251    Printer status            Printer output
+  11111001  F9  249    Ascii keyboard status
+  11110111  F7  247    Int#1 serial/net input    Int#1 serial/net output
+  11101111  EF  239    Microdrive/serial status  Microdrive/serial control
+  11100111  E7  231    Microdrive data           Microdrive data
+  11011111  DF  223 *
+  11011101  DD  221 *
+  11011011  DB  219 *
+  11011001  D9  217 *
+  10111111  BF  191
+  10111101  BD  189
+  10111011  BB  187
+  10111001  B9  185
+  10011111  9F  159 *
+  10011101  9D  157 *
+  10011011  9B  155 *
+  10011001  99  153 *
+  01111111  7F  127
+  01111101  7D  125
+  01111011  7B  123    DISCiPLE control          DISCiPLE control
+  01111001  79  121
+  01011111  5F   95 *
+  01011101  5D   93 *
+  01011011  5B   91 *
+  01011001  59   89 *
+  00111111  3F   63
+  00111101  3D   61
+  00111011  3B   59
+  00111001  39   57
+  00011111  1F   31    Kempston Joystick
+  00011101  1D   29 +
+  00011011  1B   27 +
+  00011001  19   25 +
+
+* marks addresses that clash with an A5 kempston interface
++ marks addresses that clash with an A7-A6-A5 kempston interface
+
+
+Port &FF - User Port
+--------------------
+Reading - Input from input lines
+Writing - Output to output latch
+
+
+Port &FE - Sinclair ULA
+-----------------------
+Reading:
+The eight high address lines specify which half-row of five keys should be
+read:
+
+        Bit   7   6   5   4   3   2   1   0
+            +---+---+---+-------------------+
+            |   | E |   |   Key Scan Line   |  E=Ear
+            +---+---+---+-------------------+
+
+     A8  11111110 #FEFE   V   C   X   Z  SHIFT
+     A9  11111101 #FDFE   G   F   D   S    A
+    A10  11111011 #FBFE   T   R   E   W    Q
+    A11  11110111 #F7FE   5   4   3   2    1
+    A12  11101111 #EFFE   6   7   8   9    0
+    A13  11011111 #DFFE   Y   U   I   O    P
+    A14  10111111 #BFFE   H   J   K   L  ENTER
+    A15  01111111 #7FFE   B   N   M  SYM SPACE
+
+If a key is pressed, the relevant bit is read as a zero.  If the key is not
+pressed, the bit is read as a one. It is possible to use bits 5 and 7 to
+access two more columns of keys, giving another 16 keys.
+
+Writing:
+        Bit   7   6   5   4   3   2   1   0
+            +-----------+---+---+-----------+
+            |   |   |   | B | M |   Border  |  M=Mic, B=Buzzer
+            +-----------+---+---+-----------+
+
+The lowest three bits specify the border colour; a zero in bit 3 activates
+the MIC output, whilst a one in bit 5 activates the internal speaker.
+
+
+Port &FD - ASCII Keyboard/Memory Select
+---------------------------------------
+Reading: input from ASCII keyboard
+
+Writing:
+        Bit   7   6   5   4   3   2   1   0
+            +---------------+---------------+
+            |   ROM Bank    |   RAM Bank    |   External Memory Select
+            +---------------+---------------+
+
+ROM Bank: Memory paged in at &0000    RAM Bank: Memory paged in at &C000
+           
+           %000n - Internal or External ROM 0-1
+           %010n - Internal ROM 0-1
+           %1n0n - External ROM 0-3
+
+OUT &FD,%1xxxxxxx asserts ~ROMCS and prevents other ROMs being accessed.  On
+the Spectrum 128 this results in an internal ROM being selected, but access
+to it supressed and the specified external ROM is accessed.
+
+OUT &FD,%01xxxxxx releases ~ROMCS and allows other ROMs to be accessed. On
+the Spectrum 128 this results in the internal ROMs being accessed.
+
+OUT &FD,%00xxxxxx either asserts or releases ~ROMCS depending on the ROMBox
+links.  If the links are unset internal ROMs are accessed. If the links are
+set, internal ROMs are overridden and external ROMs are accessed.
+
+This allows an external ROM to be present in bank 0 on startup, but still
+allow access to the internal ROMs in bank 2 and 3.
+
+Bit 5 must be zero to prevent the Spectrum 128 paging register being
+disabled, giving four external ROM banks. If disabling access to the
+internal ROMs is acceptable, then bit 5 can be used, giving 8 or 16 ROM
+banks. Note that this means that any access to bank 2 and three will access
+whichever ROM was last selected before the Spectrum 128 paging register was
+disabled.
+
+With an unmodified Interface 1 or similar hardware, shadow ROMs will only be
+paged in if ~ROMCS is released by paging in bank 2 or 3 (or 0 or 1 if the
+ROMBox links are unset). With a modified Interface 1 to provide a secondary
+~ROMCS signal, shadow ROMs can be paged in with any bank selected.
+
+
+        Bit   7   6   5   4   3   2   1   0
+            +-------+---+---+---+-----------+
+            |       | D | R | S | RAM Bank  |   Spectrum 128 Memory Select
+            +-------+---+---+---+-----------+
+
+      D: Disable further access
+      R: Memory paged in at &0000   - 0=128k ROM, 1=48k ROM
+      S: Memory displayed as screen - 0=bank 4, 1=bank 7
+  RAM Bank: Memory paged in at &C000
+
+With the external memory select register sharing the same address as the
+Spectrum 128 memory select register at &7FFD both can be written to at the
+same time.  If the value written enables an external ROM, then whatever
+ROM is selected by the Spectrum 128 is overridden.
+
+The Spectrum 128 only decodes the top two bits of the address high byte,
+so a write to %01xxxxxx:&FD writes to the memory select latch.  As the
+Spectrum 128 select latch only responds to the bottom six bits of the
+data, OUT (&FD),A can be used if A contains a value in the range &40-&7F.
+
+A full range of ROM numbers is:
+   %0000 Internal ROM 0/External ROM 0  %1000 External ROM #0
+   %0001 Internal ROM 1/External ROM 1  %1001 External ROM #1
+   %0100 Internal ROM 0                 %1100 External ROM #2
+   %0101 Internal ROM 1                 %1101 External ROM #3
+
+
+
+Port &FB - Centronics Printer
+-----------------------------
+Reading: printer status
+        Bit   7   6   5   4   3   2   1   0
+            +---+---+---+---+---+---+---+---+
+            |   |   |   |   |   |   |   |   | 
+            +---+---+---+---+---+---+---+---+
+        ~BUSY +   |   |   |   |
+             ACK -+   |   |   |
+             ~ERROR --+   |   |
+            ~PAPER OUT ---+   +--- SELECTED
+
+Writing: data output to printer port, data can be written if IN &FB bit7=1,
+         writing generates STROBE.
+
+
+Port &FB - Sinclair Printer
+---------------------------
+Reading: printer status
+            Bit   7   6   5   4   3   2   1   0
+                +---+---+---+---+---+---+---+---+
+                |   |   |   |   |   |   |   |   | 
+                +---+---+---+---+---+---+---+---+
+   stylus ready --+   |                       +-- encoder pulse
+ printer not present -+
+
+Writing: printer control
+            Bit   7   6   5   4   3   2   1   0
+                +---+---+---+---+---+---+---+---+
+                |   |   |   |   |   |   |   |   | 
+                +---+---+---+---+---+---+---+---+
+    print a dot --+                   |   |
+                                      |   +-- slow printer motor
+                                      +---- stop motor
+
+
+Port &F9 - ASCII Keyboard
+-------------------------
+Reading: keyboard status
+        Bit   7   6   5   4   3   2   1   0
+            +---+---+---+---+---+---+---+---+
+            |   |   |   |   |   |   |   |   | 
+            +---+---+---+---+---+---+---+---+
+                              |   |   |   +-- SHIFT
+                              |   |   +---- CONTROL
+                              |   +------ CAPS
+                              +-------- REPEAT
+
+Writing: unused
+
+
+Port &F7 - Interface 1 serial input
+-----------------------------------
+Reading:
+        Bit   7   6   5   4   3   2   1   0
+            +---+-----------------------+---+
+            |txd|   |   |   |   |   |   |net|
+            +---+-----------------------+---+
+
+txd: input on serial port TXD line
+net: input on network line
+
+
+Writing:
+        Bit   7   6   5   4   3   2   1   0
+            +---------------------------+---+
+            |   |   |   |   |   |   |   |out|
+            +---------------------------+---+
+
+out: output to serial port RXD line, or network, or drive select
+     Output selected with &EF bit 0
+
+
+Port &EF - Interface 1 control
+------------------------------
+Reading:
+        Bit   7   6   5   4   3   2   1   0
+            +-----------+---+---+---+---+---+
+            |   |   |   |   |   |   |   |   |
+            +-----------+---+---+---+---+---+
+                          |   |   |   |   +-- write protect
+                          |   |   |   +---- sync
+                          |   |   +------ gap
+             busy --------+   +-------- dtr
+
+Writing:
+        Bit   7   6   5   4   3   2   1   0
+            +-------+---+---+---+---+---+---+
+            |   |   |   |   |   |   |   |   |
+            +-------+---+---+---+---+---+---+
+                      |   |   |   |   |   +-- comms data
+                      |   |   |   |   +---- comms clock
+           wait ------+   |   |   +------ r/w
+              cts --------+   +-------- erase
+
+
+Port &E7 - Interface 1 Microdrive data
+--------------------------------------
+Reading: data from microdrive
+Writing: data to microdrive
+
+
+Port &1F - Kempston Joystick/Input port
+---------------------------------------
+Reading: joystick position
+          Bit   7   6   5   4   3   2   1   0
+              +---+---+---+---+---+---+---+---+
+              |   |   |   |   |   |   |   |   | 
+              +---+---+---+---+---+---+---+---+
+  input bit 7 --+   |   |   |   |   |   |   +-- RIGHT
+    input bit 6 ----+   |   |   |   |   +---- LEFT
+           FIRE 2 ------+   |   |   +------ DOWN
+             FIRE 1 --------+   +-------- UP
+                                       
+Writing: unused

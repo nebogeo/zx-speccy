@@ -1,0 +1,81 @@
+Non-looping Constant Execution-Time 8-bit Multiply Code for the Z80
+===================================================================
+
+The usual method of multiplying a number is to repeatedly add one of the
+numbers looping the the count of the other number. However, most
+multiplication can be done with a combination of rotations and additions or
+subtractions.
+
+
+; Multiplying by powers of 2
+;
+ADD A,A    ; *2
+ADD A,A    ; *4
+ADD A,A    ; *8
+ADD A,A    ; *16
+ADD A,A    ; *32
+ADD A,A    ; *64
+ADD A,A    ; *128
+;
+;
+; Multiplying by powers of 3
+LD  B,A
+ADD A,A
+ADD A,B    ; *3
+ADD A,A    ; *6
+ADD A,A    ; *12
+ADD A,A    ; *24
+ADD A,A    ; *48
+ADD A,A    ; *96
+ADD A,A    ; *192
+;
+;
+; Multiplying by powers of 5
+;
+LD  B,A
+ADD A,A
+ADD A,A
+ADD A,B    ; *5
+ADD A,A    ; *10
+ADD A,A    ; *20
+ADD A,A    ; *40
+ADD A,A    ; *80
+ADD A,A    ; *160
+;
+;
+; Multiplying by powers of 7
+;
+LD  B,A
+ADD A,A
+ADD A,B
+ADD A,A
+ADD A,B    ; *7
+ADD A,A    ; *14
+ADD A,A    ; *28
+ADD A,A    ; *56
+ADD A,A    ; *104
+ADD A,A    ; *208
+;
+;
+; Multiplying by powers of 9
+;
+LD  B,A
+ADD A,A
+ADD A,A
+ADD A,A
+ADD A,B    ; *9
+ADD A,A    ; *18
+ADD A,A    ; *36
+ADD A,A    ; *72
+ADD A,A    ; *144
+;
+;
+
+
+; 
+;      0   1   2   3   4   5   6   7   8   9
+;  0           2   3   2   5   3   7   2   9
+; 10   5  11   3  13   7  15   2  17   9  19
+; 20   5  21  11  23   3  25  13  27   7  29
+; 30  15  31   2  33  17  35   9  37  19  39
+;

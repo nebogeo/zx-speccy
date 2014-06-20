@@ -1,0 +1,41 @@
+Setting, Clearing and Copying bits of data
+==========================================
+
+AND xx will clear the bits in A that are also clear in xx, for example:
+
+       A            xx      after AND xx
+   %abcdefgh    %01010101    %0b0d0f0h
+
+OR xx will set the bits in A that are also set in xx, for example:
+
+       A            xx      after OR xx
+   %abcdefgh    %01010101    %a1c1e1g1
+
+XOR xx will toggle the bits in A that are set in xx, for example:
+
+       A            xx      after XOR xx
+   %abcdefgh    %01010101    %aBcDeFgH
+
+To clear the bits in A that are ''set'' in xx, use both OR and XOR, for
+example:
+
+       A            xx      after OR xx  after XOR xx
+   %abcdefgh    %01010101    %a1c1e1g1    %a0c0e0g0
+
+You can copy a number of bits to a memory location without changing the
+other bits using XOR and AND. For example, to copy the top four bits of A
+into a memory location without changing the bottom four bits, use the
+following:
+
+                A=12345678  dst=abcdefgh
+    XOR dst       ********      abcdefgh
+    AND &F0       ****0000      abcdefgh
+    XOR dst       1234efgh      abcdefgh
+    LD  dst,A     1234efgh      1234efgh
+
+This is much more efficient than code such as:
+
+    PUSH AF
+    LD   A,dst:AND &0F:LD dst,A
+    POP  AF
+    AND  &F0:OR dst:LD dst,A

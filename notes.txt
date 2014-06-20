@@ -1,0 +1,29 @@
+registers
+
+a f
+b c
+d e
+h l
+ix
+iy
+
+a is 8 bit accumulator
+hl is sort of 16 bit accumualtor (only destination for add/sub)
+b for loops : djnz is "decrement b jump if not zero"
+
+ld reg, 255   ; literal
+ld reg, reg   ; register
+ld (reg), reg ; dereference
+ld reg, (reg) ; dereference
+ld reg, (ix + 3) ; array lookup
+
+16bit pairs, bc, de, hl, ix, iy
+
+push/pop stack - 16bits
+
+inc
+dec
+add
+sub
+adc
+sbc

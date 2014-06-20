@@ -1,0 +1,178 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<HTML><HEAD>
+<META http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+<META name="MSSmartTagsPreventParsing" content="True">
+<META name="Author" content="Jonathan Graham Harston">
+<TITLE>Tape File I/O - MDFS::Info.Comp.Spectrum.ProgTips.tapeio/htm</TITLE>
+<STYLE type="text/css">H3 {margin: 0px}</STYLE>
+</HEAD>
+
+<BODY>
+<table width="100%" bgcolor="#000000" border="0" cellspacing="0">
+<tr><td align="center" width="80"><img src="/Software/Spectrum/img/logo.gif" alt="[img]">
+<td align="left"><font size="+4" color="#ffffff"><b>Respecifying Tape I/O Routines</b></font>
+</table>
+
+<TABLE bgcolor="#FFFF66" width="100%"><TR><TD>
+<SMALL>&nbsp;<A href="../../../../"
+target="_top">MDFS</a>::<A href="../../../"
+target="_top">Info</a>.<A href="../../"
+target="_top">Comp</a>.<A href="../"
+target="_top">Spectrum</a>.<A href="./"
+target="_top">ProgTips</a>.<B>tapeio/htm</B>
+</SMALL><TD align="right"><SMALL>
+<A href="http://google.co.uk/custom?domains=mdfs.net&amp;sitesearch=mdfs.net">Search</A>
+&nbsp;</SMALL></TABLE><BR>
+
+The Spectrum ROM tape routines provide two main entry points -
+<code>SA_BYTES</code> and <code>LD_BYTES</code>. These two routines load
+and save data from and to tape, with the entry parameters specifying
+
+<p>
+However, these entry parameters can be thought of slightly differently as
+opening a file for input or output, and reading or writing data from or to
+that opened file. Defining the entry parameters in this way allows the
+tape routines to be replaced with code that accesses different media, but
+still have the same functionality.
+
+<pre>
+Original Specification
+======================
+
+0556 - LD_BYTES - Load Bytes From Tape
+--------------------------------------
+On entry:
+  A:  00=header, FF=data
+  Cy: 1=load, 0=verify
+  IX= start address to load/verify to
+  DE= number of bytes to load/verify
+On exit:
+  C : bytes loaded or verified
+  NC: nothing done, or load or verify error
+
+New specification
+=================
+
+0556 - RD_FILE - Scan For Next
+------------------------------
+On entry:
+  A=00, Cy=1   : Scan for next file
+  DE           =filename length+7 (minimum 10+7)
+  IX+0..IX+DE-1: Space to return file information
+On exit:
+  Cy=1         : A file found, data in IX+0 onwards.
+  Cy=0         : File not found
+
+0556 - RD_FILE - Open For Input
+-------------------------------
+On entry:
+  A=00, Cy=1   : Open file for input, closing any previously open file
+  DE           =filename length+7 (minimum 10+7)
+  IX-DE        =>file type
+  IX-DE+1      =>filename to search for (padded with spaces)
+  IX-4         =>address to load to or zero to use file's load address
+  IX+0..IX+DE-1: Space to return file information
+On exit:
+  Cy=1         : A file found, data in IX+0 onwards. Calling program must
+		check if names match
+  Cy=0         : File not found
+Note:
+  This call looks identical to 'Scan For Next'. The called routine can't
+  tell if the calling program is cataloguing the media or is wanting to
+  open a file. Consequently, the called code should not expect anything in
+  memory at negative offsets from IX, and the calling code caller should
+  check for the filenames matching.
+
+0556 - RD_FILE - Read from input file
+-------------------------------------
+On entry:
+  A=FF, Cy=1   : Read data from current input file
+  DE           =length to read
+  IX           =address to read to
+On exit:
+  Cy=1         : Data read ok
+  Cy=0         : Not all data read
+  IX           =>byte after last byte read
+  DE           =amount of data not read
+
+0556 - RD_FILE - Verify from input file
+---------------------------------------
+On entry:
+  A=FF, Cy=0   : Verify data in current input file
+  DE           =length to verify
+  IX           =address of data to verify
+On exit:
+  Cy=1         : Data verified ok
+  Cy=0         : Verification error
+  IX           =>byte where verification error
+  DE           =(amount of data not verified)+1
+
+0556 - RD_FILE - Verify file header
+-----------------------------------
+On entry:
+  A=00, Cy=0   : Verify file information
+  DE           =filename length+7
+  IX-DE        =>file type
+  IX-DE+1      =>filename
+  IX-6         =>
+  IX-4         =>
+  IX-2         =>
+  IX+0..IX+DE-1: Space to return file information
+
+On exit:
+  Cy=1         : Data verified ok
+  Cy=0         : Verification error
+  IX           =>byte where verification error
+  DE           =(amount of data not verified)+1
+
+
+Original specification
+======================
+
+04C2 - SA_BYTES - Save bytes to tape
+------------------------------------
+On entry:
+  A:  00=header, FF=data
+  IX= start address to save from
+  DE= number of bytes to save
+
+New specification
+=================
+
+04C2 - WR_FILE - Open For Output
+--------------------------------
+On entry:
+  A=00         : Open file for output, closing any previously open file
+  DE           =  filename length+7
+  IX+0         => file type
+  IX+1         => filename
+  IX+DE-6      => file length
+  IX+DE-4      => file load address
+  IX+DE-2      => file exec address
+On exit:
+  Cy=1         : File opened
+  Cy=0         : File not opened
+
+04C2 - WR_FILE - Write data to output file
+------------------------------------------
+On entry:
+  A=FF         : Write data to current output file
+  DE           =  data length
+  IX           => data start
+On exit:
+  Cy=1         : Data written ok
+  Cy=0         : Data not written
+</pre>
+
+<center><hr>
+<A href="http://www.anybrowser.org" target="_top">
+<img border="0" align="left" src="/Docs/Web/anybrw.gif"
+alt="Best viewed with Any Browser" width="88"></A>
+<A href="http://validator.w3.org/check/referer" target="_top">
+<img border="0" align="right" src="/Docs/Web/vh40.gif"
+alt="Valid HTML 4.0!" width="88"></A>
+Hosted by <a href="http://force9.net" target="_top">Force9 Internet</a>
+- Authored by <a href="../../../../User/JGH/">J.G.Harston</a>
+<br>Last update: 10-Jul-2005</center>
+</BODY>
+</HTML>

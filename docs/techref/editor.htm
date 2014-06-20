@@ -1,0 +1,202 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<HTML><HEAD>
+<META http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+<META name="MSSmartTagsPreventParsing" content="True">
+<META name="Author" content="Jonathan Graham Harston">
+<TITLE>Editor - Spectrum ProgTips</TITLE>
+<STYLE type="text/css">H3 {margin: 0px}</STYLE>
+</HEAD>
+
+<BODY>
+<table bgcolor="#000000" border="0" cellspacing="0" width="100%">
+<tr><td align="center" width="80"><img src="/Software/Spectrum/img/logo.gif" alt="[img]">
+<td align="left"><font size="+4" color="#ffffff"><b>Line Editor</b></font>
+</table>
+
+<TABLE bgcolor="#FFFF66" width="100%"><TR><TD>
+<SMALL>&nbsp;<A HREF="../../../../"
+target="_top">MDFS</a>::<A HREF="../../../"
+target="_top">Info</a>.<A HREF="../../"
+target="_top">Comp</a>.<A HREF="../"
+target="_top">Spectrum</a>.<A HREF="./"
+target="_top">ProgTips</a>.<B>editor/htm</B>
+</SMALL><TD align="right"><SMALL>
+<A HREF="http://google.co.uk/custom?domains=mdfs.net&amp;sitesearch=mdfs.net">Search</A>
+&nbsp;</SMALL></TABLE><BR>
+
+The BBC and Amstrad CPC line editor have a copy cursor that lets you copy
+characters from elsewhere on the screen. The CPC also lets you move the text
+cursor within the input line. This bit of code replicates this for the
+Spectrum, along with three line delete functions: delete to start, delete to
+end, and delete whole line.
+
+<p>
+The routine is called with <code>GOSUB 1000</code>. It returns the entered
+line in <code>a$</code> when <code>ENTER</code> is pressed, or returns
+<code>a$</code> set to <code>CHR$27</code> if <code>SHIFT-SYMBOL</code> is
+pressed, as an Escape key.
+
+<p>
+You can download the routine as plain text
+<a href="editor.txt">editor.txt</a> (2K) and Spectrum Tapefile
+<a href="editor.tap">editor.tap</a> (3K).
+
+<H3>Keyboard Layout</H3>
+
+The editor routine used the following keyboard layout.
+
+<pre>
+              Spectrum keyboard layout with JGH line editor
+              =============================================
+
+                            &lt;-- COPY CURSOR MOVEMENT --&gt;
++-----++-----++-----++-----++-----++-----++-----++-----++-----++-----+
+|COPY ||CAPS || DEL&gt;||LEFT ||LEFT ||DOWN || UP  ||RIGHT||RIGHT||&lt;DEL |
+|  !  ||  @  ||  #  ||  $  ||  %  ||  &  ||  '  ||  (  ||  )  ||  _  |
+|  1  ||  2  ||  3  ||  4  ||  5  ||  6  ||  7  ||  8  ||  9  ||  0  |
++-----++-----++-----++-----++-----++-----++-----++-----++-----++-----+
+  +-----++-----++-----++-----++-----++-----++-----++-----++-----++-----+
+  |  Q  ||  W  ||  E  ||  R  ||  T  ||  Y  ||  U  ||  I  ||  O  ||  P  |
+  |DEL&lt;-||&lt;DEL&gt;||DEL-&gt;||  &lt;  ||  &gt;  ||  [  ||  ]  || (C) ||  ;  ||  "  |
+  |  q  ||  w  ||  e  ||  r  ||  t  ||  y  ||  u  ||  i  ||  o  ||  p  |
+  +-----++-----++-----++-----++-----++-----++-----++-----++-----++-----+
+     +-----++-----++-----++-----++-----++-----++-----++-----++-----++-----+
+     |  A  ||  S  ||  D  ||  F  ||  G  ||  H  ||  J  ||  K  ||  L  ||ENTER|
+     |  ~  ||  |  ||  \  ||  {  ||  }  ||  ^  ||  -  ||  +  ||  =  ||ENTER|
+     |  a  ||  s  ||  d  ||  f  ||  g  ||  h  ||  j  ||  k  ||  l  ||ENTER|
+     +-----++-----++-----++-----++-----++-----++-----++-----++-----++-----+
++--------++-----++-----++-----++-----++-----++-----++-----++-----++--------+
+|        ||  Z  ||  X  ||  C  ||  V  ||  B  ||  N  ||  M  || ESC || BREAK  |
+|  ESC   ||  :  ||  `  ||  ?  ||  /  ||  *  ||  ,  ||  .  ||     || SPACE  |
+| SHIFT  ||  z  ||  x  ||  c  ||  v  ||  b  ||  n  ||  m  || SYM || SPACE  |
++--------++-----++-----++-----++-----++-----++-----++-----++-----++--------+
+
+Notes:
+     Top line: Shift+key            SS-Q Deletes to start of line
+  Middle line: Symbol+key           SS-W Deletes whole line
+  Bottom line: unshifted key        SS-E Deletes to end of line
+</pre>
+
+<H3>Line Editor Routine</H3>
+
+<pre> 1000 REM Editor
+ 1010 LETflg=0:LETcopy=0:LETcopx=0:LETcop=0:LETa$="":LETb$=""
+ 1030 PRINTOVER1;CHR$143;CHR$8;
+ 1040 GOSUB1150:REM Wait for a keypress
+ 1041 IFcop=0THENLETcopx=33-PEEK23688:LETcopy=24-PEEK23689
+ 1050 IFq$&lt;" "THENGOTO1100       :REM Deal with control codes
+ 1060 IFq$&gt;CHR$127THENGOSUB1200  :REM Convert symbols
+ 1070 POKE23692,255:POKE16415,255:PRINTq$;:GOSUB1120:PRINTb$;:IFflg=4THENPRINT" ";
+ 1075 GOSUB1130
+ 1076 IFPEEK16415&lt;&gt;255THENFORz=1TO32:PRINTCHR$8;:NEXTz
+ 1080 LETa$=a$+q$
+ 1090 GOTO1030
+ 1091 :
+ 1092 :
+ 1093 PRINTb$;" ":LETa$=CHR$27:RETURN
+ 1095 PRINTb$;" ":LETa$=a$+b$:RETURN
+ 1100 LETflg=0:GOSUB1100+50*CODEq$
+ 1110 GOTO1030+10*flg:REM Loop back to a point specified by flg
+ 1119 :
+ 1120 REM Save cursor positions
+ 1121 LETp1=PEEK23684:LETp2=PEEK23685:LETp3=PEEK23688:LETp4=PEEK23689:RETURN
+ 1129 :
+ 1130 REM Restore cursor positions
+ 1131 POKE23684,p1:POKE23685,p2:POKE23688,p3:POKE23689,p4:RETURN
+ 1140 :
+ 1150 REM Wait for a keypress
+ 1155 IFcop=1THENGOSUB1120:PRINTATcopy,copx;OVER1;INK8;PAPER8;BRIGHT8;FLASH1;" ";:GOSUB1130
+ 1160 PAUSE50
+ 1170 LETq$=INKEY$:IFq$=""THENGOTO1170
+ 1175 IFcop=1THENGOSUB1120:PRINTATcopy,copx;OVER1;INK8;PAPER8;BRIGHT8;FLASH0;" ";:GOSUB1130
+ 1180 RETURN
+ 1195 :
+ 1199 REM Convert symbols
+ 1200 IFq$=CHR$226THENLETq$="~":RETURN
+ 1201 IFq$=CHR$195THENLETq$="|":RETURN
+ 1202 IFq$=CHR$205THENLETq$="\":RETURN
+ 1203 IFq$=CHR$204THENLETq$="{":RETURN
+ 1204 IFq$=CHR$203THENLETq$="}":RETURN
+ 1205 IFq$=CHR$198THENLETq$="[":RETURN
+ 1206 IFq$=CHR$197THENLETq$="]":RETURN
+ 1207 IFq$=CHR$172THENLETq$=CHR$127:RETURN
+ 1208 IFq$&lt;&gt;CHR$199THENGOTO1220
+ 1209 PRINTOVER1;CHR$128;CHR$8;
+ 1210 LETq$="":LETflg=4:FORz=1TOLENa$:PRINTCHR$8;:NEXTz:LETb$=a$+b$:LETa$="":RETURN
+ 1220 IFq$&lt;&gt;CHR$200THENGOTO1250
+ 1221 LETq$="":PRINTOVER1;CHR$128;CHR$8;
+ 1230 LETflg=4:FORz=1TOLENb$:PRINTOVER1;" ";:NEXTz
+ 1240 LETa$=a$+b$:LETb$="":RETURN
+ 1250 LETq$="":IFa$=""THENRETURN
+ 1255 PRINTOVER1;CHR$143;CHR$8;:FORz=1TOLENa$
+ 1260 PRINTCHR$8;:GOSUB1120:PRINTb$;" ";:GOSUB1130
+ 1265 NEXTz:LETa$=""
+ 1290 RETURN
+ 1295 :
+ 1300 REM Shift-3 - Forwards delete
+ 1301 IFb$=""THENBEEP.1,0:LETflg=1:RETURN
+ 1310 LETb$=b$(2TO):PRINTOVER1;CHR$128;CHR$8;
+ 1320 LETq$="":LETflg=4:RETURN
+ 1340 :
+ 1350 REM Shift-4 - Back one
+ 1351 IFa$=""THENLETflg=1:RETURN
+ 1360 PRINTOVER1;CHR$143;CHR$8;CHR$8;
+ 1370 LETb$=a$(LENa$)+b$:LETa$=a$(TOLENa$-1)
+ 1380 RETURN
+ 1390 :
+ 1400 REM Shift-2 - Caps lock
+ 1410 LETcaps=INT(PEEK23658/8):LETcaps=1-(caps-2*INT(caps/2)):LETflg=1:POKE23658,8*caps
+ 1420 RETURN
+ 1440 :
+ 1450 REM Shift-1 - Edit
+ 1451 LETq$=SCREEN$(copy,copx)
+ 1460 LETcop1=cop:GOSUB1550:LETcop=cop1:LETflg=1.1:RETURN
+ 1470 :
+ 1490 LETflg=1:LETcop=1:RETURN
+ 1495 :
+ 1500 REM Shift-5 - Left
+ 1501 LETcopx=copx-1:IFcopx&gt;-1THENGOTO1490
+ 1510 LETcopx=31:GOTO1650
+ 1540 :
+ 1550 REM Shift-8 - Right
+ 1551 LETcopx=copx+1:IFcopx&lt;32THENGOTO1490
+ 1560 LETcopx=0:REM Continue in to...
+ 1570 :
+ 1600 REM Shift-6 - Down
+ 1601 LETcopy=copy+1:IFcopy&gt;21THENLETcopy=0
+ 1610 GOTO1490
+ 1640 :
+ 1650 REM Shift-6 - Up
+ 1651 LETcopy=copy-1:IFcopy&lt;0THENLETcopy=21
+ 1660 GOTO1490
+ 1690 :
+ 1700 REM Shift-0 - Delete
+ 1701 IFa$=""THENBEEP.1,0:LETflg=1:RETURN
+ 1710 PRINTCHR$8;"  ";CHR$8;CHR$8;:LETa$=a$(TOLENa$-1)
+ 1720 LETflg=4:LETq$="":RETURN
+ 1740 :
+ 1750 REM Enter - Exit routine
+ 1751 LETflg=6.5:RETURN
+ 1790 :
+ 1800 REM Shift-Shift - Escape
+ 1810 LETflg=6.3:RETURN
+ 1840 :
+ 1850 REM Shift-9 - Forward one
+ 1851 IFb$=""THENLETflg=1:RETURN
+ 1860 LETa$=a$+b$(1):LETb$=b$(2TO)
+ 1870 PRINTOVER1;CHR$143;
+ 1880 RETURN
+</pre>
+
+<center><hr>
+<A href="http://www.anybrowser.org" target="_top">
+<img border="0" align="left" src="/Docs/Web/anybrw.gif"
+alt="Best viewed with Any Browser" width="88"></A>
+<A href="http://validator.w3.org/check/referer" target="_top">
+<img border="0" align="right" src="/Docs/Web/vh40.gif"
+alt="Valid HTML 4.0!" width="88"></A>
+Hosted by <a href="http://force9.net" target="_top">Force9 Internet</a>
+- Authored by <a href="../../../../User/JGH/">J.G.Harston</a>
+<br>Last update: 14-Jun-2005</center>
+</BODY>
+</HTML>

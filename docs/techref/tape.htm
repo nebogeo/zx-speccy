@@ -1,0 +1,97 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<HTML><HEAD>
+<META http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+<META name="MSSmartTagsPreventParsing" content="True">
+<META name="Author" content="Jonathan Graham Harston">
+<TITLE>Tape Routines without BREAK - MDFS::Info.Comp.Spectrum.ProgTips.tape/htm</TITLE>
+<STYLE type="text/css">H3 {margin: 0px}</STYLE>
+</HEAD>
+
+<BODY>
+<table width="100%" bgcolor="#000000" border="0" cellspacing="0">
+<tr><td align="center" width="80"><img src="/Software/Spectrum/img/logo.gif" alt="[img]">
+<td align="left"><font size="+4" color="#ffffff"><b>Tape Routines without BREAK error</b></font>
+</table>
+
+<TABLE bgcolor="#FFFF66" width="100%"><TR><TD>
+<SMALL>&nbsp;<A href="../../../../"
+target="_top">MDFS</a>::<A href="../../../"
+target="_top">Info</a>.<A href="../../"
+target="_top">Comp</a>.<A href="../"
+target="_top">Spectrum</a>.<A href="./"
+target="_top">ProgTips</a>.<B>tape/htm</B>
+</SMALL><TD align="right"><SMALL>
+<A href="http://google.co.uk/custom?domains=mdfs.net&amp;sitesearch=mdfs.net">Search</A>
+&nbsp;</SMALL></TABLE><BR>
+
+The Spectrum ROM tape routines provide two main entry points -
+<code>SA_BYTES</code> and <code>LD_BYTES</code>. These two routines check
+for SPACE being pressed and generate an error if pressed. It is possible
+to call the tape routines and have them return instead of generate an
+error. Each routine starts by stacking <code>SALD_RET</code> which
+restores the border colour, restores interrupts and generates a BREAK
+error if SPACE is pressed. By calling just after this is done, the calling
+routine is returned to if SPACE is pressed. Annoyingly, there is no way of
+stopping the tape routines from aborting when just SPACE is pressed
+instead of SHIFT+SPACE.
+
+<P><H3>Saving data</H3>
+<pre>CALL &amp;04C6       ; Call SA_BYTES+4
+CALL TapeExit    ; Restore border, check SPACE, enable INTs
+
+; On exit:
+;   C    : Ok
+;   NC   : SPACE pressed
+</pre>
+
+<P><H3>Loading data</H3>
+<pre>INC D
+EX   AF,AF'      ; Set up flags
+DEC  D
+DI               ; Disable interupts
+CALL &amp;0562       ; Call LD_BYTES+12
+CALL TapeExit    ; Restore border, check SPACE, enable INTs
+
+; On exit:
+;   C    : Ok
+;   NC+NZ: loading error or verify error
+;   NC+Z : SPACE pressed
+</pre>
+
+After calling LD_BYTES+12 the SPACE key has to be checked to differentiate
+between a tape error and a BREAK error. 
+
+<P><H3>Restore border colour</H3>
+After calling the tape routines the border colour has to be restored and
+interrupts enabled. This code also checks the SPACE key as LD_BYTES
+returns the same flags for BREAK and tape error.
+
+<pre>.TapeExit
+PUSH AF          ; Save return state
+LD   A,(BORDCR)  ; Get border colour
+AND  &amp;38
+RRCA
+RRCA
+RRCA
+OUT  (&amp;FE),A     ; Set border colour
+POP  AF          ; Restore flags
+EI               ; Enable interupts
+RET  C           ; No error
+LD   A,&amp;7F
+IN   A,(&amp;FE)     ; Scan B-SPACE
+AND  1           ; Check if SPACE pressed
+RET              ; NZ=not pressed, Z=pressed
+</pre>
+
+<center><hr>
+<A href="http://www.anybrowser.org" target="_top">
+<img border="0" align="left" src="/Docs/Web/anybrw.gif"
+alt="Best viewed with Any Browser" width="88"></A>
+<A href="http://validator.w3.org/check/referer" target="_top">
+<img border="0" align="right" src="/Docs/Web/vh40.gif"
+alt="Valid HTML 4.0!" width="88"></A>
+Hosted by <a href="http://force9.net" target="_top">Force9 Internet</a>
+- Authored by <a href="../../../../User/JGH/">J.G.Harston</a>
+<br>Last update: 10-Jul-2005</center>
+</BODY>
+</HTML>

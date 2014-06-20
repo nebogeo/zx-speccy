@@ -1,0 +1,13 @@
+It's also possible to synthesise LD HL,PC and CALL HL/CALL (HL) by having a
+little subroutine somewhere: Code:
+
+LDHLPC  E1  POP HL
+CALLHL  E9  JP (HL)
+
+Doing CALL LDHLPC does the equivalent of LD HL,PC.
+Doing CALL CALLHL does the equivalent of CALL (HL).
+
+I usually put this code at 000E-000F when I'm writing non-Spectrum Z80 code.
+
+You can do this on the Spectrum by calling 1FC8 to do CALL (HL) and calling
+1FC6 with the Z flag clear to do LD HL,PC (eg XOR A : DEC A : CALL 1FC6).

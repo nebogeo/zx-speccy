@@ -1,0 +1,91 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<HTML><HEAD>
+<META http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+<META name="MSSmartTagsPreventParsing" content="True">
+<META name="Author" content="Jonathan Graham Harston">
+<TITLE>Scrolling Input - MDFS::Info.Comp.Spectrum.ProgTips.input/htm</TITLE>
+<STYLE type="text/css">H3 {margin: 0px}</STYLE>
+</HEAD>
+
+<BODY>
+<TABLE width="100%" bgcolor="#000000" border="0" cellspacing="0">
+<tr><td align="center" width="80"><img src="/Software/Spectrum/img/logo.gif" alt="[img]">
+<td align="left"><font size="+4" color="#ffffff"><b>Scrolling Input</b></font>
+</TABLE>
+
+<TABLE bgcolor="#FFFF66" width="100%"><TR><TD>
+<SMALL>&nbsp;<A href="../../../../"
+target="_top">MDFS</a>::<A href="../../../"
+target="_top">Info</a>.<A href="../../"
+target="_top">Comp</a>.<A href="../"
+target="_top">Spectrum</a>.<A href="./"
+target="_top">ProgTips</a>.<B>input/htm</B>
+</SMALL><TD align="right"><SMALL>
+<A href="http://google.co.uk/custom?domains=mdfs.net&amp;sitesearch=mdfs.net">Search</A>
+&nbsp;</SMALL></TABLE><BR>
+
+On most computers the <code>INPUT</code> command displays characters at the
+current print position, and as you enter additional lines the previous lines
+stay on screen and the input position scrolls downwards.
+
+<p>
+On the Spectrum, <code>INPUT</code> always uses the bottom lines of the
+screen. Once a line has been input, it is cleared and the next
+<code>INPUT</code> displays at the bottom of the screen again.
+
+<p>
+On the Spectrum you can write code to give the same effect as
+<code>INPUT</code> on other systems. The main disadvantages are that you
+have to write a complete editor, deal with adding and removing characters,
+process key-repeats and key-clicks all yourself. This is a lot of work, when
+almost everything is already available in the system ROM.
+
+<p>
+The code simulates the &quot;normal&quot; <code>INPUT</code> used on other
+systems. It works by increasing the size of the bottom input area enough to
+push the top of the bottom of the screen up to the same position as the
+current screen print position. The <code>INPUT</code> is then taken at the
+top of the bottom of the screen. After the <code>INPUT</code>, the entered
+string is then redisplayed. This example displays a &quot;*&quot; prompt
+before the input.
+
+<PRE>FOR a=0 TO 31:PRINT CHR$8;:NEXT a
+INPUT AT PEEK 23689-2,0;AT 0,0;"*";LINE a$
+INPUT;:PRINT '"*";a$
+</PRE>
+
+<ul style="margin:0;padding:0;list-style-position:inside">
+<li>The loop first moves the print position up one line, as each
+<code>INPUT</code> moves down one line too many.
+
+<li>Location 23689 is the print position line number, held as 24-line
+number. <code>INPUT</code>ing at the line minus 2 forces the bottom of the
+screen to expand up to the same line by making it big enough to find the
+equivalant line off the bottom of the screen. For instance, if the print
+line is 4, then 23689 will hold 20, and moving the <code>INPUT</code>
+position to 18 expands the bottom of the screen to 18 lines.
+
+<li>The <code>INPUT</code> position is then moved back to (0,0) to read
+the entered line.
+
+<li>Once the line is entered, the bottom of the screen is reset with
+<code>INPUT;</code> and the entered line is redisplayed, this time in the
+top of the screen.
+</ul>
+
+<p>
+To see what is happening, make the <code>BORDER</code> a different colour
+from the <code>PAPER</code>.
+
+<center><hr>
+<A href="http://www.anybrowser.org" target="_top">
+<img border="0" align="left" src="/Docs/Web/anybrw.gif"
+alt="Best viewed with Any Browser" width="88"></A>
+<A href="http://validator.w3.org/check/referer" target="_top">
+<img border="0" align="right" src="/Docs/Web/vh40.gif"
+alt="Valid HTML 4.0!" width="88"></A>
+Hosted by <a href="http://force9.net" target="_top">Force9 Internet</a>
+- Authored by <a href="../../../../User/JGH/">J.G.Harston</a>
+<br>Last update: 18-Oct-2004</center>
+</BODY>
+</HTML>

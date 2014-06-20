@@ -1,0 +1,81 @@
+Non-looping Constant Execution-Time 16-bit Multiply Code for the Z80
+====================================================================
+
+The usual method of multiplying a number is to repeatedly add one of the
+numbers looping the the count of the other number. However, most
+multiplication can be done with a combination of rotations and additions or
+subtractions.
+
+
+; Multiplying by powers of 2
+;
+ADD HL,HL    ; *2
+ADD HL,HL    ; *4
+ADD HL,HL    ; *8
+ADD HL,HL    ; *16
+ADD HL,HL    ; *32
+ADD HL,HL    ; *64
+ADD HL,HL    ; *128
+;
+;
+; Multiplying by powers of 3
+LD  DE,HL
+ADD HL,HL
+ADD HL,DE    ; *3
+ADD HL,HL    ; *6
+ADD HL,HL    ; *12
+ADD HL,HL    ; *24
+ADD HL,HL    ; *48
+ADD HL,HL    ; *96
+ADD HL,HL    ; *192
+;
+;
+; Multiplying by powers of 5
+;
+LD  DE,HL
+ADD HL,HL
+ADD HL,HL
+ADD HL,DE    ; *5
+ADD HL,HL    ; *10
+ADD HL,HL    ; *20
+ADD HL,HL    ; *40
+ADD HL,HL    ; *80
+ADD HL,HL    ; *160
+;
+;
+; Multiplying by powers of 7
+;
+LD  DE,HL
+ADD HL,HL
+ADD HL,DE
+ADD HL,HL
+ADD HL,DE    ; *7
+ADD HL,HL    ; *14
+ADD HL,HL    ; *28
+ADD HL,HL    ; *56
+ADD HL,HL    ; *104
+ADD HL,HL    ; *208
+;
+;
+; Multiplying by powers of 9
+;
+LD  DE,HL
+ADD HL,HL
+ADD HL,HL
+ADD HL,HL
+ADD HL,DE    ; *9
+ADD HL,HL    ; *18
+ADD HL,HL    ; *36
+ADD HL,HL    ; *72
+ADD HL,HL    ; *144
+;
+;
+
+
+; 
+;      0   1   2   3   4   5   6   7   8   9
+;  0           2   3   2   5   3   7   2   9
+; 10   5  11   3  13   7  15   2  17   9  19
+; 20   5  21  11  23   3  25  13  27   7  29
+; 30  15  31   2  33  17  35   9  37  19  39
+;

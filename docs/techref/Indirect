@@ -1,0 +1,58 @@
+Indirect jumps and calls in Z80 code
+====================================
+
+The 6502 has the opcode JMP (vector) which jumps to an address pointed to by
+the contents of memory at (vector). Similar action can be done on the Z80
+with the following code:
+
+	PUSH HL			; Save HL
+	LD   HL,(VECTOR)	; Get address from vector
+	EX   (SP),HL		; Swap address onto stack, restore HL
+	RET			; Jump to stacked vector
+
+This can be adapted to only jump via the vector if it is nonzero:
+
+	PUSH HL			; Save HL
+	LD   HL,(VECTOR)	; Get address from vector
+	PUSH AF
+	LD   A,H		; Check HL
+	OR   L
+	JR   Z,NOJUMP		; Zero, just return
+	POP  AF
+	EX   (SP),HL		; Swap address onto stack, restore HL
+	RET			; Jump to stacked vector
+NOJUMP	POP  AF
+	POP  HL
+	RET
+
+Using indirect jumps allows the destinations of Z80 restarts and interupts
+in ROM-based code to be changable:
+
+.RST00	PUSH HL:LD HL,(VEC00)
+	EX (SP),HL:RET
+	NOP:NOP
+.RST08	PUSH HL:LD HL,(VEC08)
+	EX (SP),HL:RET
+	NOP:NOP
+.RST10	PUSH HL:LD HL,(VEC10)
+	EX (SP),HL:RET
+	NOP:NOP
+.RST18	PUSH HL:LD HL,(VEC18)
+	EX (SP),HL:RET
+	NOP:NOP
+.RST20	PUSH HL:LD HL,(VEC20)
+	EX (SP),HL:RET
+	NOP:NOP
+.RST28	PUSH HL:LD HL,(VEC28)
+	EX (SP),HL:RET
+	NOP:NOP
+.RST30	PUSH HL:LD HL,(VEC30)
+	EX (SP),HL:RET
+	NOP:NOP
+.RST38	PUSH HL:LD HL,(VEC38)
+	EX (SP),HL:RET
+	NOP:NOP
+	DEFS &0066-$
+.NMI	CALL NMI1:RETN		; NMI code needs to end with RETN
+.NMI1	PUSH HL:LD HL,(VEC66)
+	EX (SP),HL:RET
