@@ -3,4 +3,4 @@
 
 #z80asm $@.asm ; bin2tap/bin2tap a.bin ; xspect a.tap
 
-zxbasic/zxbasm.py -TaB $@.asm ; fuse --speed 89 $@.tzx
+zxbasic/zxbasm.py -TaB $@.asm ; fuse --speed 100 $@.tzx
