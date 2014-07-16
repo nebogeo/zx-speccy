@@ -11,26 +11,232 @@
 		;; 7. conn3-addr-l
 		;; 8. conn4-addr-h
 		;; 9. conn4-addr-l
-        ;; 10 spacer
+        ;; 10 x
+        ;; 11 y
 
+;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-		brain_base equ 4000h
-        brain_size equ 16
-        neuron_size equ 11
-        brain_mask equ %00001111
+		brain_base equ 7000h
+        brain_size equ 64
+        neuron_size equ 12
+        brain_mask equ %00111111
 main:
         call clear_screen
         call randomise_brain
-
+        call draw_interface
 loop:
-        call brain_think
 
+        call brain_think
         ld a, (brain_base)
         ld (noise), a
+
+        ld a, r
+        rr a
+        rr a
+        rr a
+        and 1
+        cp 1
+        jp z, input_stuff
+        jp loop
+input_stuff:
+        call draw_cursor
+        call do_input
+        call draw_cursor
+        ;;         call draw_neurons
 
         jp loop
         ret
 
+;;; input and interface ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+cursor_x:
+        db 0
+cursor_y:
+        db 0
+
+draw_cursor:
+        ld a, (cursor_y)
+        ld b, a
+        ld a, (cursor_x)
+        ld c, a
+        call ataddr
+        xor %01001000
+        ld (hl),a
+        ret
+
+;; find neuron under the cursor if there is one, addr in hl, 0 if not found
+select:
+        ld b, brain_size
+		ld ix, brain_base
+        ld hl, brain_base
+loop_select:
+        push bc
+        ld b, (ix+10)           ; load x coord of neuron
+        ld a, (cursor_x)        ; cant load (addr) into anywhere but a
+        cp b
+        jp z, find_x_same
+        jp find_x_end
+find_x_same:
+        ld b, (ix+11)           ; load y coord of neuron
+        ld a, (cursor_y)
+        cp b                    ; check
+        jp z, find_found
+        jp find_x_end
+find_found:
+        pop bc
+        ;;  result in ix
+        ret
+find_x_end:
+        ld bc, neuron_size
+        add ix, bc              ; add size to addr
+        add hl, bc              ; replicate on hl
+        pop bc
+        djnz loop_select
+        ld hl, 0
+        ret
+
+do_input:
+        call read_keyboard
+        cp 'W'
+        jp z, input_up
+        cp 'S'
+        jp z, input_down
+        cp 'A'
+        jp z, input_left
+        cp 'D'
+        jp z, input_right
+        cp ' '
+        jp z, input_select
+        cp 'T'
+        jp z, input_tl
+        cp 'Y'
+        jp z, input_tr
+        cp 'G'
+        jp z, input_bl
+        cp 'H'
+        jp z, input_br
+        ret
+input_up:
+        ld a, (cursor_y)
+        add a, -1
+        ld (cursor_y), a
+        ret
+input_down:
+        ld a, (cursor_y)
+        add a, 1
+        ld (cursor_y), a
+        ret
+input_left:
+        ld a, (cursor_x)
+        add a, -1
+        ld (cursor_x), a
+        ret
+input_right:
+        ld a, (cursor_x)
+        add a, 1
+        ld (cursor_x), a
+        ret
+input_select:
+        call select
+        ld hl, pattern_active
+        ld b, h
+        ld c, l
+        call set_pattern
+        ret
+input_tl:
+        call select
+        ld hl, pattern_tl
+        ld b, h
+        ld c, l
+        call set_pattern
+        ret
+input_bl:
+        call select
+        ld hl, pattern_bl
+        ld b, h
+        ld c, l
+        call set_pattern
+        ret
+input_br:
+        call select
+        ld hl, pattern_br
+        ld b, h
+        ld c, l
+        call set_pattern
+        ret
+input_tr:
+        call select
+        ld hl, pattern_tr
+        ld b, h
+        ld c, l
+        call set_pattern
+        ret
+
+;; hl=ix = neuron, bc is pattern
+set_pattern:
+        ld a, l
+        cp 0
+        jp z, input_select_2
+        jp found_neuron
+input_select_2:
+        ld a, h
+        cp 0
+        jp z, input_select_end
+found_neuron:
+        ;; found a neuron! hl and ix are set up
+        ld h, b
+        ld l, c
+        ld c, (ix+10)
+        ld b, (ix+11)
+        call draw_char_xor
+input_select_end:
+        ret
+
+
+
+draw_interface:
+        ld b, brain_size
+		ld ix, brain_base
+loop_draw_interface:
+        push bc
+        ld c, (ix+10)
+        ld b, (ix+11)
+        ld hl, pattern_base
+        call draw_char
+        ld c, (ix+10)
+        ld b, (ix+11)
+        call ataddr
+        ld (hl), %00101010
+        ld bc, neuron_size
+        add ix, bc
+        pop bc
+
+        djnz loop_draw_interface
+        ret
+
+draw_neurons:
+        ld b, brain_size
+		ld hl, brain_base
+        ld c, 0
+loop_draw_neurons:
+        ;;         call play
+        push bc
+        ld c,b
+        rl c
+        rl c
+        rl c
+        rl c
+        ld b,10
+        ld d, (hl)
+        call draw_byte
+
+        ld bc, neuron_size
+        add hl, bc
+        pop bc
+        djnz loop_draw_neurons
+        ret
+
+;;; thinking part ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 		;; update:
 		;; - add up connections->activation
@@ -64,7 +270,6 @@ neuron_think:
         ld a, (ix+1)
         and %00000111
         ld b, a
-
         sub a
         ld l, (ix+2)
         ld h, (ix+3)
@@ -78,18 +283,13 @@ neuron_think:
         ld h, (ix+8)
         ld l, (ix+9)
         add a, (hl)
-
 think_rot_loop:
         rrca
         djnz think_rot_loop
-
         ld (ix+0),a
-
         ret
 
-
-
-
+;;; setup ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 randomise_brain:
         ld b, brain_size
@@ -106,6 +306,7 @@ loop_randomise_brain:
         ;; random neuron pointed at by ix
         ;; clobbers bc (index_to_addr), hl
 randomise_neuron:
+        push bc
         call rnd
         ld (ix+0), a            ; activation level
         call rnd
@@ -134,9 +335,32 @@ randomise_neuron:
         call index_to_addr
         ld (ix+8), l            ; connection 4
         ld (ix+9), h            ; connection 4
+        pop bc
 
-        ld (ix+10), %11111111
+        ;; screen location
+        ;; b should contain loop count?
+        ld a, b
+        dec a
+        and %00000111           ; mod 8
+        sla a                    ;* 2 (leave gaps)
+        add a, 8
+        ld (ix+10), a           ; set x
+
+        ld a, b
+        and %00000001
+        ld c, a
+
+        ld a, b                 ; reload b
+        dec a
+        sra a
+        sra a                   ; quotient 4
+        add a, c
+        add a, 4
+        ld (ix+11), a
+        ld h, 0
+        ld l, (ix+11)
         ret
+
 
         ;; index in a, return address in hl
         ;; clobbers bc
@@ -164,7 +388,7 @@ rnd:
         ld (rnd_state), a
         ret
 rnd_state:
-        db 4h
+        db 2h
 
 mul8:
 __MUL8:
@@ -209,146 +433,6 @@ __MUL16NOADD:
 
 ;;; graphcs ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-draw_image:  ; c=x, b=y, hl=image data
-        push hl
-        push bc
-        push de
-        ld a, b                 ; calc end y
-        add a, 8
-        ld e, a                 ; put in e
-draw_image_loop:
-        ld d, (hl)
-        call draw_byte
-        inc hl
-        inc b
-        ld a, b
-        cp e                    ; check end pos
-        jp nz, draw_image_loop
-        pop de
-        pop bc
-        pop hl
-        ret
-
-draw_rect:                      ; c=x, b=y, e=x2, d=y2
-        push bc
-        push de
-        call draw_vline
-        ld d,e
-        call draw_hline
-        pop de
-        ld c,e
-        call draw_vline
-        pop bc
-        push bc
-        push de
-        ld b,d
-        ld d,e
-        call draw_hline
-        pop de
-        pop bc
-        ret
-
-draw_vline:                     ; c=y,b=x,d=end y
-        push bc
-vline_loop:
-        call draw_pix
-        inc b
-        ld a,b
-        cp d
-        jp nz,vline_loop
-        pop bc
-        ret
-
-draw_hline:                     ; c=y,b=x,d=end x
-        push bc
-hline_loop:
-        call draw_pix
-        inc c
-        ld a,c
-        cp d
-        jp nz,hline_loop
-        pop bc
-        ret
-
-draw_byte:                      ; with b,c = y,x, d=bitmap byte
-        ld a, c
-        and %00000111           ; get x%8
-        jp z, draw_byte_aligned ; no need to slide around!
-        push de
-        ld e, a                 ; store offset in e
-        push hl
-        call pix_addr           ; get pixel address
-        push bc
-        ld b,e                  ; shift byte based on x%8
-        push de
-draw_byte_rotate_loop_right:
-        srl d
-        djnz draw_byte_rotate_loop_right
-        ld a, (hl)
-        xor d                    ; or over what's there now
-        ld (hl), a              ; draw left half
-        pop de
-        ld a, 8                  ; now start right half
-        sub e                    ; take shift away from 8
-        ld b, a                  ; stick it in the loop reg
-        inc hl                   ; draw to next byte to the right
-        ld a, d                  ; quicker to put the thing in a for and below
-draw_byte_rotate_loop_left:
-        sll a                   ; rotate left
-        and %11111110           ; need to manually clear bit 0 :(
-        djnz draw_byte_rotate_loop_left
-        ld e, a                 ; juggle registers
-        ld a, (hl)              ; ok to trash them now
-        xor e                    ; or over what's there
-        ld (hl), a              ; draw the right half
-        pop bc
-        pop hl
-        pop de
-        ret
-
-draw_byte_aligned:              ; with b,c = y,x, d=bitmap byte
-        push hl
-        call pix_addr           ; get pixel address
-        ld a, d                 ; load bitmap
-        xor (hl)                 ; or with bg
-        ld (hl), a              ; write pattern to pixel
-        pop hl
-        ret
-
-draw_pix:                       ; with b,c = y,x
-        push bc
-        push hl
-        call pix_addr           ; get pixel address
-        push hl                 ; save hl, which contains dst address
-        ld a, c                 ; load x into a
-        ld b, 0                 ; clear b
-        and %00000111           ; mask x to get bit position
-        ld c, a                 ; stick masked in c
-        ld hl, table            ; load table position
-        add hl, bc              ; add offset
-        ld a, (hl)              ; load bit pattern
-        pop hl                  ; get old pixel address back
-        or (hl)                 ; don't clear existing pixels here
-        push hl                 ; apply the mask pattern
-        ld hl, pix_mask         ; load locaton
-        and (hl)                ; apply it
-        pop hl
-        ld (hl), a              ; write pattern to pixel
-        pop hl
-        pop bc
-        ret
-table:
-        db %10000000
-        db %01000000
-        db %00100000
-        db %00010000
-        db %00001000
-        db %00000100
-        db %00000010
-        db %00000001
-
-pix_mask:
-        db %11111111
 
 ;; ------------------------------------------------------
 
@@ -505,42 +589,138 @@ pix_addr:
         db "N"
         db "B"
 
-patt_0:
-        db %00111100
+pattern_base:
+        db %00011000
+        db %00100100
         db %01000010
         db %10000001
         db %10000001
-        db %10000001
-        db %10000001
         db %01000010
+        db %00100100
+        db %00011000
+pattern_active:
+        db %00000000
+        db %00000000
+        db %00011000
         db %00111100
-patt_1:
         db %00111100
-        db %01000010
-        db %10000001
-        db %10011001
-        db %10011001
-        db %10000001
-        db %01000010
-        db %00111100
-patt_2:
-        db %00111100
-        db %01000010
-        db %10011001
-        db %10111101
-        db %10111101
-        db %10011001
-        db %01000010
-        db %00111100
-patt_3:
-        db %00111100
-        db %01111110
-        db %11111111
-        db %11111111
-        db %11111111
-        db %11111111
-        db %01111110
-        db %00111100
+        db %00011000
+        db %00000000
+        db %00000000
+pattern_tl:
+        db %11100000
+        db %11000000
+        db %10000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+pattern_tr:
+        db %00000111
+        db %00000011
+        db %00000001
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+pattern_bl:
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %10000000
+        db %11000000
+        db %11100000
+pattern_br:
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000001
+        db %00000011
+        db %00000111
+
+        ;; display hl at bc
+draw_char:
+        call chaddr         ; find screen address for char.
+        ld b,8              ; number of pixels high.
+char0:
+        ld a,(hl)           ; source graphic.
+        ld (de),a           ; transfer to screen.
+        inc hl              ; next piece of data.
+        inc d               ; next pixel line.
+        djnz char0          ; repeat
+        ret
+
+        ;; display hl at bc
+draw_char_xor:
+        call chaddr         ; find screen address for char.
+        ld b,8              ; number of pixels high.
+char0_xor:
+        ld a, (de)
+        xor (hl)
+        ld (de),a           ; transfer to screen.
+        inc hl              ; next piece of data.
+        inc d               ; next pixel line.
+        djnz char0_xor      ; repeat
+        ret
+
+draw_byte:              ; with bc = xy, d=bitmap byte
+        call chaddr         ; find screen address for char.
+        ld a, d                 ; load bitmap
+        xor (hl)                 ; or with bg
+        ld (hl), a              ; write pattern to pixel
+        ret
+
+
+;; bc -> de
+chaddr:
+        ld a,b              ; vertical position.
+        and 24              ; which segment, 0, 1 or 2?
+        add a,64            ; 64*256 = 16384, Spectrum's screen memory.
+        ld d,a              ; this is our high byte.
+        ld a,b              ; what was that vertical position again?
+        and 7               ; which row within segment?
+        rrca                ; multiply row by 32.
+        rrca
+        rrca
+        ld e,a              ; low byte.
+        ld a,c              ; add on y coordinate.
+        add a,e             ; mix with low byte.
+        ld e,a              ; address of screen position in de.
+        ret
+
+;; bc -> a/hl
+ataddr:
+        ld a,b              ; x position.
+        rrca                ; multiply by 32.
+        rrca
+        rrca
+        ld l,a              ; store away in l.
+        and 3               ; mask bits for high byte.
+        add a,88            ; 88*256=22528, start of attributes.
+        ld h,a              ; high byte done.
+        ld a,l              ; get x*32 again.
+        and 224             ; mask low byte.
+        ld l,a              ; put in l.
+        ld a,c              ; get y displacement.
+        add a,l             ; add to low byte.
+        ld l,a              ; hl=address of attributes.
+        ld a,(hl)           ; return attribute in a.
+        ret
+
+
+
+
+
+
+
+
+
 
 print_a:
         push af
@@ -549,7 +729,7 @@ print_a:
         pop af
         ret
 
-shwnum:
+print_hl:
         push de
         push hl
        ld a,48      ; leading zeroes (or spaces).
