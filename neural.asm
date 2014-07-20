@@ -13,22 +13,53 @@
 		;; 9. conn4-addr-l
         ;; 10 x
         ;; 11 y
+        ;; 12 control byte
 
 ;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-		brain_base equ 7000h
-        brain_size equ 64
-        neuron_size equ 12
-        brain_mask equ %00111111
+		brain_base equ 28600
+        brain_size equ 32
+        neuron_size equ 13
+        brain_mask equ %00011111
+        input_neuron1 equ brain_base+(neuron_size*20)
 main:
+        call unit_test
+        ld a, %00000111
+        call set_all_attr
+
         call clear_screen
-        call randomise_brain
+        call init_brain
+
+        ld ix, input_neuron1
+        ld (ix+12), %00000000
+
+        call draw_neuron_attrs
         call draw_interface
+
+
+        ld hl, input_neuron1
+        call print_hl
+
+
 loop:
+        ld a, (clock1)
+        inc a
+        ld (clock1), a
+        jp z, clk2_tick
+        jp clk_end
+
+clk2_tick:
+        ld a, (clock2)
+        inc a
+        ld (clock2), a
+
+clk_end:
+        ld a, (clock2)
+        ld (input_neuron1), a
 
         call brain_think
         ld a, (brain_base)
-        ld (noise), a
+        ld (noise), a           ; update noise byte
 
         ld a, r
         rr a
@@ -42,66 +73,56 @@ input_stuff:
         call draw_cursor
         call do_input
         call draw_cursor
-        ;;         call draw_neurons
+        call draw_neurons
 
         jp loop
         ret
 
 ;;; input and interface ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+clock1:
+        db 0
+clock2:
+        db 0
+clock3:
+        db 0
 cursor_x:
-        db 0
+        db 5
 cursor_y:
-        db 0
+        db -1
 
 draw_cursor:
-        ld a, (cursor_y)
-        ld b, a
-        ld a, (cursor_x)
-        ld c, a
-        call ataddr
-        xor %01001000
-        ld (hl),a
+        call select_cursor
+        ld b, 0
+        ld c, 10
+        add hl, bc
+        ld c, (hl)
+        inc hl
+        ld b, (hl)
+        ld d, %01000001
+        call attr_xor_2X2
         ret
 
-;; find neuron under the cursor if there is one, addr in hl, 0 if not found
-select:
-        ld b, brain_size
-		ld ix, brain_base
-        ld hl, brain_base
-loop_select:
-        push bc
-        ld b, (ix+10)           ; load x coord of neuron
-        ld a, (cursor_x)        ; cant load (addr) into anywhere but a
-        cp b
-        jp z, find_x_same
-        jp find_x_end
-find_x_same:
-        ld b, (ix+11)           ; load y coord of neuron
+
+        ;; cursor -> addr in hl/ix
+select_cursor:
         ld a, (cursor_y)
-        cp b                    ; check
-        jp z, find_found
-        jp find_x_end
-find_found:
-        pop bc
-        ;;  result in ix
-        ret
-find_x_end:
-        ld bc, neuron_size
-        add ix, bc              ; add size to addr
-        add hl, bc              ; replicate on hl
-        pop bc
-        djnz loop_select
-        ld hl, 0
+        sla a
+        sla a
+        sla a                   ; quotient 8
+        ld b, a
+        ld a, (cursor_x)
+        add a, b
+        call index_to_addr_ix              ; a -> ix & hl
         ret
 
 do_input:
         call read_keyboard
-        cp 'W'
+        cp 'E'
         jp z, input_up
         cp 'S'
         jp z, input_down
-        cp 'A'
+        cp 'W'
         jp z, input_left
         cp 'D'
         jp z, input_right
@@ -117,84 +138,115 @@ do_input:
         jp z, input_br
         ret
 input_up:
+        ld a, (cursor_x)
+        ld b, a
         ld a, (cursor_y)
-        add a, -1
+        ld c, a
+        call iso_move_tr
+        ld a, b
+        ld (cursor_x), a
+        ld a, c
         ld (cursor_y), a
         ret
 input_down:
+        ld a, (cursor_x)
+        ld b, a
         ld a, (cursor_y)
-        add a, 1
+        ld c, a
+        call iso_move_bl
+        ld a, b
+        ld (cursor_x), a
+        ld a, c
         ld (cursor_y), a
         ret
 input_left:
         ld a, (cursor_x)
-        add a, -1
+        ld b, a
+        ld a, (cursor_y)
+        ld c, a
+        call iso_move_tl
+        ld a, b
         ld (cursor_x), a
+        ld a, c
+        ld (cursor_y), a
         ret
 input_right:
         ld a, (cursor_x)
-        add a, 1
+        ld b, a
+        ld a, (cursor_y)
+        ld c, a
+        call iso_move_br
+        ld a, b
         ld (cursor_x), a
+        ld a, c
+        ld (cursor_y), a
         ret
 input_select:
-        call select
-        ld hl, pattern_active
-        ld b, h
-        ld c, l
-        call set_pattern
         ret
 input_tl:
-        call select
-        ld hl, pattern_tl
-        ld b, h
-        ld c, l
-        call set_pattern
+        call select_cursor
+        ld a, (ix+12)           ; load control byte
+        xor %00000001
+        ld (ix+12), a
+        ld c, (ix+10)
+        ld b, (ix+11)
+        ld hl, pattern_one
+        call draw_char_xor_2X2
         ret
 input_bl:
-        call select
-        ld hl, pattern_bl
-        ld b, h
-        ld c, l
-        call set_pattern
+        call select_cursor
+        ld a, (ix+12)           ; load control byte
+        xor %00000010
+        ld (ix+12), a
+        ld c, (ix+10)
+        ld b, (ix+11)
+        ld hl, pattern_three
+        call draw_char_xor_2X2
         ret
 input_br:
-        call select
-        ld hl, pattern_br
-        ld b, h
-        ld c, l
-        call set_pattern
+        call select_cursor
+        ld a, (ix+12)           ; load control byte
+        xor %00000100
+        ld (ix+12), a
+        ld c, (ix+10)
+        ld b, (ix+11)
+        ld hl, pattern_four
+        call draw_char_xor_2X2
         ret
 input_tr:
-        call select
-        ld hl, pattern_tr
-        ld b, h
-        ld c, l
-        call set_pattern
+        call select_cursor
+        ld a, (ix+12)           ; load control byte
+        xor %00001000
+        ld (ix+12), a
+        ld c, (ix+10)
+        ld b, (ix+11)
+        ld hl, pattern_two
+        call draw_char_xor_2X2
         ret
 
 ;; hl=ix = neuron, bc is pattern
 set_pattern:
-        ld a, l
-        cp 0
-        jp z, input_select_2
-        jp found_neuron
-input_select_2:
-        ld a, h
-        cp 0
-        jp z, input_select_end
-found_neuron:
-        ;; found a neuron! hl and ix are set up
         ld h, b
         ld l, c
         ld c, (ix+10)
         ld b, (ix+11)
-        call draw_char_xor
-input_select_end:
+        call draw_char_2X2
         ret
 
 
 
 draw_interface:
+
+        ld c, 1
+        ld b, 21
+        ld hl, slub
+        call draw_char_2X2
+        ld c, 1
+        ld b, 21
+        ld d, %01111000
+        call attr_2X2
+
+
         ld b, brain_size
 		ld ix, brain_base
 loop_draw_interface:
@@ -202,38 +254,113 @@ loop_draw_interface:
         ld c, (ix+10)
         ld b, (ix+11)
         ld hl, pattern_base
-        call draw_char
-        ld c, (ix+10)
-        ld b, (ix+11)
+        call draw_char_2X2
+
         call ataddr
-        ld (hl), %00101010
+        ;;    ld (hl), %00101010
         ld bc, neuron_size
         add ix, bc
         pop bc
 
         djnz loop_draw_interface
+
+;;; highlight noise neuron
+
+        ld ix, brain_base
+        ld c, (ix+10)
+        ld b, (ix+11)
+        ld d, %00000011
+        call attr_2X2
+
         ret
+
+draw_neuron_attrs:
+        ld b, brain_size
+		ld ix, brain_base
+loop_draw_neuron_attrs:
+        push bc
+        ld c, (ix+10)
+        inc c
+        inc c
+        ld b, (ix+11)
+        ld h, (ix+0)
+        call ataddr
+        ld (hl), %00000100
+        ld bc, neuron_size
+        add ix, bc
+        pop bc
+        djnz loop_draw_neuron_attrs
+        ret
+
 
 draw_neurons:
         ld b, brain_size
-		ld hl, brain_base
-        ld c, 0
+		ld ix, brain_base
 loop_draw_neurons:
-        ;;         call play
         push bc
-        ld c,b
-        rl c
-        rl c
-        rl c
-        rl c
-        ld b,10
-        ld d, (hl)
-        call draw_byte
-
+        ld c, (ix+10)
+        inc c
+        inc c
+        ld b, (ix+11)
+        ld h, (ix+0)
+        call draw_byte_stretch
         ld bc, neuron_size
-        add hl, bc
+        add ix, bc
         pop bc
         djnz loop_draw_neurons
+        ret
+
+;;; iso - bc=xy
+
+iso_move_tr:
+        ld a, b
+        add a, -1
+        and %00000111
+        ld b, a
+        and %00000001
+        ret z
+        ld a, c
+        add a, 1
+        and %00000011
+        ld c, a
+        ret
+iso_move_bl:
+        ld a, b
+        add a, 1
+        and %00000111
+        ld b, a
+        and %00000001
+        ret nz
+        ld a, c
+        add a, -1
+        and %00000011
+        ld c, a
+        ret
+
+iso_move_tl:
+        ld a, b
+        add a, 1
+        and %00000111
+        ld b, a
+        and %00000001
+        ret z
+        ld a, c
+        add a, 1
+        and %00000011
+        ld c, a
+        ret
+
+iso_move_br:
+        ld a, b
+        add a, -1
+        and %00000111
+        ld b, a
+        and %00000001
+        ret nz
+        ld a, c
+        add a, -1
+        and %00000011
+        ld c, a
         ret
 
 ;;; thinking part ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -253,6 +380,7 @@ loop_brain_think:
         add ix, bc
         pop bc
         djnz loop_brain_think
+
         ret
 
 noise:
@@ -267,174 +395,198 @@ play:
         ret
 
 neuron_think:
-        ld a, (ix+1)
-        and %00000111
-        ld b, a
-        sub a
+        ld a, (ix+12)           ; load control byte
+        and %00010000           ; dummy
+        cp 0
+        jp z, neuron_think_end
+
+        ld e, 0
+
+        ld a, (ix+12)           ; load control byte
+        and %00000001           ; first neuron
+        cp 0
+        jp z, neuron2
         ld l, (ix+2)
         ld h, (ix+3)
+        ld a, e
         add a, (hl)
-        ld h, (ix+4)
-        ld l, (ix+5)
+        ld e, a
+
+neuron2:
+        ld a, (ix+12)           ; load control byte
+        and %00000010           ; second neuron
+        cp 0
+        jp z, neuron3
+        ld l, (ix+4)
+        ld h, (ix+5)
+        ld a, e
         add a, (hl)
-        ld h, (ix+6)
-        ld l, (ix+7)
+        ld e, a
+
+neuron3:
+        ld a, (ix+12)           ; load control byte
+        and %00000100           ; third neuron
+        cp 0
+        jp z, neuron4
+        ld l, (ix+6)
+        ld h, (ix+7)
+        ld a, e
         add a, (hl)
-        ld h, (ix+8)
-        ld l, (ix+9)
+        ld e, a
+
+neuron4:
+        ld a, (ix+12)           ; load control byte
+        and %00001000           ; third neuron
+        cp 0
+        jp z, think_end_add
+        ld l, (ix+8)
+        ld h, (ix+9)
+        ld a, e
         add a, (hl)
+        ld e, a
+
+think_end_add:
+        ld a, e                 ; load accumulation into a
+        ld (ix+0),a             ; update value
+
+        ld a, (ix+1)
+        and %00000111
+        cp 0
+        jp z, neuron_think_end    ; skip rotate if 0
+        ld b, a                 ; load thresh/rotate into b
 think_rot_loop:
-        rrca
+        rrc (ix+0)
         djnz think_rot_loop
-        ld (ix+0),a
+
+neuron_think_end:
         ret
 
-;;; setup ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-randomise_brain:
+;;; brain setup ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+init_brain:
         ld b, brain_size
 		ld ix, brain_base
-loop_randomise_brain:
+loop_init_brain:
         push bc
-        call randomise_neuron
+        call init_neuron
         ld bc, neuron_size
         add ix, bc
         pop bc
-        djnz loop_randomise_brain
+        djnz loop_init_brain
         ret
 
-        ;; random neuron pointed at by ix
+        ;; init neuron pointed at by ix
         ;; clobbers bc (index_to_addr), hl
-randomise_neuron:
+init_neuron:
         push bc
-        call rnd
-        ld (ix+0), a            ; activation level
-        call rnd
-        ld (ix+1), a            ; thresh
+        ld (ix+0), 0            ; activation level
+        ld (ix+1), 0            ; thresh
 
-        call rnd
-        and brain_mask
+        ld a, brain_size
+        sub b
+        ld b, a
+
+        ld a, b
+        dec a
         call index_to_addr
         ld (ix+2), l            ; connection 1
         ld (ix+3), h            ; connection 1
 
-        call rnd
-        and brain_mask
+        ld a, b
+        dec a
         call index_to_addr
         ld (ix+4), l            ; connection 2
         ld (ix+5), h            ; connection 2
 
-        call rnd
-        and brain_mask
+        ld a, b
+        dec a
         call index_to_addr
         ld (ix+6), l            ; connection 3
         ld (ix+7), h            ; connection 3
 
-        call rnd
-        and brain_mask
+        ld a, b
+        dec a
         call index_to_addr
         ld (ix+8), l            ; connection 4
         ld (ix+9), h            ; connection 4
         pop bc
+
+        ld a, b
+        and %00000001
+        ld c, a
 
         ;; screen location
         ;; b should contain loop count?
         ld a, b
         dec a
         and %00000111           ; mod 8
-        sla a                    ;* 2 (leave gaps)
-        add a, 8
+        ld d, a
+        add a, a
+        add a, d                ; a*=3
+
+        add a, 5
         ld (ix+10), a           ; set x
 
-        ld a, b
-        and %00000001
-        ld c, a
 
         ld a, b                 ; reload b
         dec a
         sra a
+        sra a
         sra a                   ; quotient 4
+
+        ld d, a
+        add a, a
+        add a, d                ; a*=3
+
+        add a, 8
         add a, c
-        add a, 4
         ld (ix+11), a
-        ld h, 0
-        ld l, (ix+11)
+
+        ;;  control byte
+        ld (ix+12), %00010000
+
         ret
 
 
         ;; index in a, return address in hl
-        ;; clobbers bc
 index_to_addr:
-        ld h, 0                 ; clear h (top byte of hl)
-        ld l, a                 ; load offset into lower byte of hl
-        ld bc, neuron_size
+        push de
         push bc
-        call mul16
-        ld bc, brain_base
-        add hl, bc              ; add to neural net base
-        ret
-
-;;;;;;;;;;;;;;; mathematics ;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-rnd:
-        ld a, (rnd_state)
+        ld hl, brain_base       ; clear h (top byte of hl)
+        and a
+        jp z, index_end
         ld b, a
-        rrca ; multiply by 32
-        rrca
-        rrca
-        xor 1fh
-        add a, b
-        sbc a, 255 ; carry
-        ld (rnd_state), a
+index_addr_loop:
+        ld de, neuron_size
+        add hl, de              ; add to neural net base
+        djnz index_addr_loop
+index_end:
+        pop bc
+        pop de
         ret
-rnd_state:
-        db 2h
 
-mul8:
-__MUL8:
-__MUL8_FAST: ; __FASTCALL__ entry, a = a * h (8 bit mul) and Carry
-		ld b, 8
-		ld l, a
-		xor a
-__MUL8LOOP:
-		add a, a ; a *= 2
-		sla l
-		jp nc, __MUL8B
-		add a, h
-__MUL8B:
-		djnz __MUL8LOOP
-		ret		; result = HL
-
-
-mul16:
-__MUL16:	; Mutiplies HL with the last value stored into de stack
-			; Works for both signed and unsigned
-		ex de, hl
-		pop hl		; Return address
-		ex (sp), hl ; CALLEE caller convention
-__MUL16_FAST:
-        ld b, 16
-        ld a, d
-        ld c, e
-        ex de, hl
-        ld hl, 0
-__MUL16LOOP:
-        add hl, hl  ; hl << 1
-        sla c
-        rla         ; a,c << 1
-        jp nc, __MUL16NOADD
-        add hl, de
-__MUL16NOADD:
-        djnz __MUL16LOOP
-		ret	; Result in hl (16 lower bits)
-
-;;; spritee ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+        ;; index in a, return address in ix and hl
+index_to_addr_ix:
+        push de
+        push bc
+        ld ix, brain_base       ; clear h (top byte of hl)
+        ld hl, brain_base       ; clear h (top byte of hl)
+        and a
+        jp z, index_ix_end
+        ld b, a
+index_addr_ix_loop:
+        ld de, neuron_size
+        add ix, de              ; add to neural net base
+        add hl, de              ; add to neural net base
+        djnz index_addr_ix_loop
+index_ix_end:
+        pop bc
+        pop de
+        ret
 
 
-;;; graphcs ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-
-;; ------------------------------------------------------
+;;; graphics ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 clear_screen:                   ; write 0 to the whole screen
         ld a, 0
@@ -459,6 +611,21 @@ dloop:
         djnz oodloop
         pop bc
         ret
+
+set_all_attr:                   ; write a to all the attrs
+        ld hl, 5800h
+        ld b, 3
+oaloop:
+        push bc
+        ld b, 256
+aloop:
+        ld (hl), a
+        inc hl
+        djnz aloop
+        pop bc
+        djnz oaloop
+        ret
+
 
 ;; ------------------------------------------------------
 ; get screen address
@@ -590,59 +757,304 @@ pix_addr:
         db "B"
 
 pattern_base:
-        db %00011000
-        db %00100100
-        db %01000010
-        db %10000001
-        db %10000001
-        db %01000010
-        db %00100100
-        db %00011000
-pattern_active:
-        db %00000000
-        db %00000000
-        db %00011000
-        db %00111100
-        db %00111100
-        db %00011000
-        db %00000000
-        db %00000000
-pattern_tl:
-        db %11100000
-        db %11000000
-        db %10000000
-        db %00000000
-        db %00000000
-        db %00000000
-        db %00000000
-        db %00000000
-pattern_tr:
-        db %00000111
         db %00000011
+        db %00001100
+        db %00110000
+        db %11000000
+        db %10110000
+        db %10001100
+        db %10000011
+        db %10000000
+
+        db %00000000
+        db %11000000
+        db %00110000
+        db %00001100
+        db %00000011
+        db %00001101
+        db %00110001
+        db %11000001
+
+        db %10000000
+        db %10000000
+        db %10000000
+        db %10000000
+        db %11000000
+        db %00110000
+        db %00001100
+        db %00000011
+
+        db %10000001
+        db %10000001
+        db %10000001
+        db %10000001
+        db %10000011
+        db %10001100
+        db %10110000
+        db %11000000
+pattern_one:
+        db %11000000
+        db %10110000
+        db %01000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+
+pattern_two:
+
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+
+        db %00000111
+        db %00011001
+        db %00000111
         db %00000001
         db %00000000
         db %00000000
         db %00000000
         db %00000000
-        db %00000000
-pattern_bl:
-        db %00000000
-        db %00000000
-        db %00000000
-        db %00000000
-        db %00000000
-        db %10000000
-        db %11000000
-        db %11100000
-pattern_br:
+
         db %00000000
         db %00000000
         db %00000000
         db %00000000
         db %00000000
-        db %00000001
+        db %00000000
+        db %00000000
+        db %00000000
+
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+
+pattern_three:
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00110000
+        db %00101100
+
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+
+        db %00100010
+        db %00100010
+        db %00100010
+        db %00110010
+        db %00001110
+        db %00000010
+        db %00000000
+        db %00000000
+
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+pattern_four:
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00001100
+
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+
+        db %00110100
+        db %00100100
+        db %00100100
+        db %00101000
+        db %00110000
+        db %00000000
+        db %00000000
+        db %00000000
+
+slub:
         db %00000011
-        db %00000111
+        db %00000110
+        db %00001100
+        db %00011000
+        db %00110000
+        db %01100000
+        db %11001100
+        db %10010100
+
+        db %11000000
+        db %01100000
+        db %00110000
+        db %00011000
+        db %00001100
+        db %00000110
+        db %01101011
+        db %01010001
+
+        db %10010101
+        db %11010010
+        db %01100000
+        db %00110000
+        db %00011000
+        db %00001100
+        db %00000110
+        db %00000011
+
+        db %01010001
+        db %10101011
+        db %00000110
+        db %00001100
+        db %00011000
+        db %00110000
+        db %01100000
+        db %11000000
+
+        ;; cb = pos d, attr
+attr_2X2:
+        call ataddr
+        ld (hl), d
+        inc c
+        call ataddr
+        ld (hl), d
+        dec c
+        inc b
+        call ataddr
+        ld (hl), d
+        inc c
+        call ataddr
+        ld (hl), d
+        ret
+
+        ;; cb = pos d, attr
+attr_xor_2X2:
+        call ataddr
+        ld a, (hl)
+        xor d
+        ld (hl), a
+        inc c
+        call ataddr
+        ld a, (hl)
+        xor d
+        ld (hl), a
+        dec c
+        inc b
+        call ataddr
+        ld a, (hl)
+        xor d
+        ld (hl), a
+        inc c
+        call ataddr
+        ld a, (hl)
+        xor d
+        ld (hl), a
+        ret
+
+
+draw_char_2X2:
+        push bc
+        call draw_char
+        pop bc
+        push bc
+        inc c
+        call draw_char
+        pop bc
+        push bc
+        inc b
+        call draw_char
+        pop bc
+        push bc
+        inc b
+        inc c
+        call draw_char
+        pop bc
+        ret
+
+draw_char_xor_2X2:
+        push bc
+        call draw_char_xor
+        pop bc
+        push bc
+        inc c
+        call draw_char_xor
+        pop bc
+        push bc
+        inc b
+        call draw_char_xor
+        pop bc
+        push bc
+        inc b
+        inc c
+        call draw_char_xor
+        pop bc
+        ret
 
         ;; display hl at bc
 draw_char:
@@ -669,11 +1081,20 @@ char0_xor:
         djnz char0_xor      ; repeat
         ret
 
-draw_byte:              ; with bc = xy, d=bitmap byte
+draw_byte:                  ; with bc = xy, h=bitmap byte
         call chaddr         ; find screen address for char.
-        ld a, d                 ; load bitmap
-        xor (hl)                 ; or with bg
-        ld (hl), a              ; write pattern to pixel
+        ld a, h
+        ld (de), a          ; load bitmap
+        ret
+
+draw_byte_stretch:                  ; with bc = xy, h=bitmap byte
+        call chaddr         ; find screen address for char.
+        ld b, 8
+stretch_loop:
+        ld a, h
+        ld (de), a          ; load bitmap
+        inc d
+        djnz stretch_loop
         ret
 
 
@@ -760,3 +1181,54 @@ shwdg0: add hl,de           ; restore total.
        rst 16              ; show character.
        pop af
        ret
+
+
+test16:
+        ld a, h
+        cp d
+        jp nz, fail
+        ld a, l
+        cp e
+        jp nz, fail
+        ret
+
+unit_test:
+
+        ld hl, 1
+        call print_hl
+
+        ld a, 0
+        ld hl, brain_base
+        ld d, h
+        ld e, l
+        call index_to_addr
+        call test16
+
+        ld hl, 2
+        call print_hl
+
+        ld a, 1
+        ld hl, brain_base+neuron_size
+        ld d, h
+        ld e, l
+        call index_to_addr
+        call test16
+
+        ld hl, 3
+        call print_hl
+
+        ld a, 10
+        ld hl, brain_base+(neuron_size*10)
+        ld d, h
+        ld e, l
+        call index_to_addr
+        call test16
+
+        ret
+fail:
+        call print_hl
+        ld h, d
+        ld l, e
+        call print_hl
+        ld hl, 9999
+        call print_hl
