@@ -22,6 +22,7 @@
         neuron_size equ 13
         brain_mask equ %00011111
         input_neuron1 equ brain_base+(neuron_size*20)
+        weave_end equ 800h
 main:
         call unit_test
         ld a, %00000111
@@ -61,6 +62,27 @@ clk_end:
         ld a, (brain_base)
         ld (noise), a           ; update noise byte
 
+
+        ld a, (weave_pos)
+        ld l, a
+        ld a, (weave_pos+1)
+        ld h, a
+
+        inc hl
+
+        ld a, l
+        ld (weave_pos), a
+        ld a, h
+        and %0100111
+        ld (weave_pos+1), a
+
+
+       ld a, (brain_base)
+        ld bc, 4000h
+        add hl, bc
+        ld (hl), a
+
+
         ld a, r
         rr a
         rr a
@@ -90,6 +112,8 @@ cursor_x:
         db 5
 cursor_y:
         db -1
+weave_pos:
+        dw 0
 
 draw_cursor:
         call select_cursor
@@ -115,6 +139,19 @@ select_cursor:
         add a, b
         call index_to_addr_ix              ; a -> ix & hl
         ret
+
+        ;; hx -> addr in hl/ix
+neuron_xy_to_addr:
+        ld a, l
+        sla a
+        sla a
+        sla a                   ; quotient 8
+        ld b, a
+        ld a, h
+        add a, b
+        call index_to_addr_ix              ; a -> ix & hl
+        ret
+
 
 do_input:
         call read_keyboard
@@ -487,6 +524,7 @@ init_neuron:
         sub b
         ld b, a
 
+
         ld a, b
         dec a
         call index_to_addr
@@ -494,19 +532,19 @@ init_neuron:
         ld (ix+3), h            ; connection 1
 
         ld a, b
-        dec a
+        inc a
         call index_to_addr
         ld (ix+4), l            ; connection 2
         ld (ix+5), h            ; connection 2
 
         ld a, b
-        dec a
+        add a, 8
         call index_to_addr
         ld (ix+6), l            ; connection 3
         ld (ix+7), h            ; connection 3
 
         ld a, b
-        dec a
+        sub 8
         call index_to_addr
         ld (ix+8), l            ; connection 4
         ld (ix+9), h            ; connection 4
@@ -757,61 +795,61 @@ pix_addr:
         db "B"
 
 pattern_base:
+        db %00000000
+        db %00000000
         db %00000011
         db %00001100
         db %00110000
-        db %11000000
-        db %10110000
-        db %10001100
-        db %10000011
-        db %10000000
+        db %00101100
+        db %00100011
+        db %00100000
 
+        db %00000000
         db %00000000
         db %11000000
         db %00110000
         db %00001100
-        db %00000011
-        db %00001101
-        db %00110001
-        db %11000001
+        db %00110100
+        db %11000100
+        db %10000100
 
-        db %10000000
-        db %10000000
-        db %10000000
-        db %10000000
-        db %11000000
+        db %00100000
+        db %00100000
+        db %00100000
         db %00110000
         db %00001100
         db %00000011
+        db %00000000
+        db %00000000
 
-        db %10000001
-        db %10000001
-        db %10000001
-        db %10000001
-        db %10000011
+        db %10000100
+        db %10000100
+        db %10000100
         db %10001100
         db %10110000
         db %11000000
+        db %00000000
+        db %00000000
 pattern_one:
+        db %00000000
+        db %00000000
+        db %00110000
         db %11000000
-        db %10110000
+        db %10000000
+        db %10000000
+        db %10000000
+        db %10000000
+
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+
         db %01000000
-        db %00000000
-        db %00000000
-        db %00000000
-        db %00000000
-        db %00000000
-
-        db %00000000
-        db %00000000
-        db %00000000
-        db %00000000
-        db %00000000
-        db %00000000
-        db %00000000
-        db %00000000
-
-        db %00000000
         db %00000000
         db %00000000
         db %00000000
@@ -840,14 +878,14 @@ pattern_two:
         db %00000000
         db %00000000
 
-        db %00000111
-        db %00011001
-        db %00000111
+        db %00000000
+        db %00000000
+        db %00000110
+        db %00001001
+        db %00000011
         db %00000001
-        db %00000000
-        db %00000000
-        db %00000000
-        db %00000000
+        db %00000001
+        db %00000010
 
         db %00000000
         db %00000000
@@ -874,8 +912,8 @@ pattern_three:
         db %00000000
         db %00000000
         db %00000000
-        db %00110000
-        db %00101100
+        db %00000000
+        db %00011000
 
         db %00000000
         db %00000000
@@ -886,12 +924,12 @@ pattern_three:
         db %00000000
         db %00000000
 
+        db %01100110
+        db %10011010
+        db %01100010
         db %00100010
-        db %00100010
-        db %00100010
-        db %00110010
-        db %00001110
-        db %00000010
+        db %00100110
+        db %00011000
         db %00000000
         db %00000000
 
