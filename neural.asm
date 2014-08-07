@@ -21,7 +21,8 @@
         brain_size equ 32
         neuron_size equ 13
         brain_mask equ %00011111
-        input_neuron1 equ brain_base+(neuron_size*20)
+        input_neuron1 equ brain_base+(neuron_size*7)
+        input_neuron2 equ brain_base+(neuron_size*31)
         weave_end equ 800h
 main:
         call unit_test
@@ -33,13 +34,14 @@ main:
 
         ld ix, input_neuron1
         ld (ix+12), %00000000
+        ld ix, input_neuron2
+        ld (ix+12), %00000000
 
-        call draw_neuron_attrs
+        ;;         call draw_neuron_attrs
         call draw_interface
 
 
         ld hl, input_neuron1
-        call print_hl
 
 
 loop:
@@ -57,6 +59,10 @@ clk2_tick:
 clk_end:
         ld a, (clock2)
         ld (input_neuron1), a
+        ld a, (clock1)
+        ld (input_neuron2), a
+
+        call draw_neurons
 
         call brain_think
         ld a, (brain_base)
@@ -77,7 +83,7 @@ clk_end:
         ld (weave_pos+1), a
 
 
-       ld a, (brain_base)
+        ld a, (brain_base)
         ld bc, 4000h
         add hl, bc
         ld (hl), a
@@ -86,16 +92,15 @@ clk_end:
         ld a, r
         rr a
         rr a
-        rr a
-        and 1
-        cp 1
+        and %00011000
+
+
         jp z, input_stuff
         jp loop
 input_stuff:
         call draw_cursor
         call do_input
         call draw_cursor
-        call draw_neurons
 
         jp loop
         ret
@@ -114,6 +119,10 @@ cursor_y:
         db -1
 weave_pos:
         dw 0
+debounce:
+        db 0
+test:
+        db 0
 
 draw_cursor:
         call select_cursor
@@ -155,6 +164,19 @@ neuron_xy_to_addr:
 
 do_input:
         call read_keyboard
+
+        cp 0
+        jp z, clear_debounce    ; no key pressed
+
+
+
+        ld a, (debounce)        ; return if key is still pressed
+        cp 0
+        ret nz
+        ld a, 1                 ; key is pressed for the first time, set debounce
+        ld (debounce), a
+        call read_keyboard
+
         cp 'E'
         jp z, input_up
         cp 'S'
@@ -164,7 +186,7 @@ do_input:
         cp 'D'
         jp z, input_right
         cp ' '
-        jp z, input_select
+        jp z, input_thresh
         cp 'T'
         jp z, input_tl
         cp 'Y'
@@ -174,6 +196,11 @@ do_input:
         cp 'H'
         jp z, input_br
         ret
+clear_debounce:
+        ld a, 0                 ; no keys pressed, so clear debounce
+        ld (debounce), a
+        ret
+
 input_up:
         ld a, (cursor_x)
         ld b, a
@@ -218,8 +245,33 @@ input_right:
         ld a, c
         ld (cursor_y), a
         ret
-input_select:
+input_thresh:
+        call select_cursor
+        ld a, (ix+1)           ; load thresh
+        inc a
+        ld (ix+1), a
+
+        ld c, (ix+10)
+        ld b, (ix+11)
+        ld hl, pattern_thresh_clear
+        call draw_char_and_2X2
+
+        ld a, (ix+1)           ; load thresh
+        and %00000111
+        sla a
+        sla a
+        sla a
+        sla a
+        sla a
+        ld d, 0
+        ld e, a
+        ld hl, pattern_thresh0
+        add hl, de
+        call draw_char_or_2X2
+
         ret
+
+
 input_tl:
         call select_cursor
         ld a, (ix+12)           ; load control byte
@@ -277,11 +329,11 @@ draw_interface:
         ld c, 1
         ld b, 21
         ld hl, slub
-        call draw_char_2X2
+        ;;         call draw_char_2X2
         ld c, 1
         ld b, 21
         ld d, %01111000
-        call attr_2X2
+        ;;         call attr_2X2
 
 
         ld b, brain_size
@@ -339,8 +391,9 @@ loop_draw_neurons:
         inc c
         inc c
         ld b, (ix+11)
+        inc b
         ld h, (ix+0)
-        call draw_byte_stretch
+        call draw_byte
         ld bc, neuron_size
         add ix, bc
         pop bc
@@ -447,6 +500,7 @@ neuron_think:
         ld h, (ix+3)
         ld a, e
         add a, (hl)
+        jp c, neuron_think_clear
         ld e, a
 
 neuron2:
@@ -458,6 +512,7 @@ neuron2:
         ld h, (ix+5)
         ld a, e
         add a, (hl)
+        jp c, neuron_think_clear
         ld e, a
 
 neuron3:
@@ -469,6 +524,7 @@ neuron3:
         ld h, (ix+7)
         ld a, e
         add a, (hl)
+        jp c, neuron_think_clear
         ld e, a
 
 neuron4:
@@ -480,6 +536,7 @@ neuron4:
         ld h, (ix+9)
         ld a, e
         add a, (hl)
+        jp c, neuron_think_clear
         ld e, a
 
 think_end_add:
@@ -492,10 +549,14 @@ think_end_add:
         jp z, neuron_think_end    ; skip rotate if 0
         ld b, a                 ; load thresh/rotate into b
 think_rot_loop:
-        rrc (ix+0)
+        srl (ix+0)
         djnz think_rot_loop
 
 neuron_think_end:
+        ret
+neuron_think_clear:
+        ld a, 0
+        ld (ix+0), a
         ret
 
 
@@ -524,46 +585,87 @@ init_neuron:
         sub b
         ld b, a
 
+        and 1
+        jp nz, init_alternate
 
+        ;; tl
         ld a, b
-        dec a
+        add a, 9
         call index_to_addr
         ld (ix+2), l            ; connection 1
         ld (ix+3), h            ; connection 1
 
+        ;; bl
         ld a, b
         inc a
         call index_to_addr
         ld (ix+4), l            ; connection 2
         ld (ix+5), h            ; connection 2
 
+        ;; br
         ld a, b
-        add a, 8
+        dec a
         call index_to_addr
         ld (ix+6), l            ; connection 3
         ld (ix+7), h            ; connection 3
 
+        ;; tr
         ld a, b
-        sub 8
+        add a, 7
         call index_to_addr
         ld (ix+8), l            ; connection 4
         ld (ix+9), h            ; connection 4
+
+
+        jp init_end
+init_alternate:
+
+        ;; tl
+        ld a, b
+        inc a
+        call index_to_addr
+        ld (ix+2), l            ; connection 1
+        ld (ix+3), h            ; connection 1
+
+        ;; bl
+        ld a, b
+        add a, -7
+        call index_to_addr
+        ld (ix+4), l            ; connection 2
+        ld (ix+5), h            ; connection 2
+
+        ;; br
+        ld a, b
+        add a, -9
+        call index_to_addr
+        ld (ix+6), l            ; connection 3
+        ld (ix+7), h            ; connection 3
+
+        ;; tr
+        ld a, b
+        dec a
+        call index_to_addr
+        ld (ix+8), l            ; connection 4
+        ld (ix+9), h            ; connection 4
+
+init_end:
+
         pop bc
 
         ld a, b
         and %00000001
+        add a, a
         ld c, a
 
         ;; screen location
-        ;; b should contain loop count?
+        ;; b should contain loop count
         ld a, b
         dec a
         and %00000111           ; mod 8
-        ld d, a
-        add a, a
-        add a, d                ; a*=3
 
-        add a, 5
+        add a, a
+
+        add a, 8
         ld (ix+10), a           ; set x
 
 
@@ -573,9 +675,8 @@ init_neuron:
         sra a
         sra a                   ; quotient 4
 
-        ld d, a
         add a, a
-        add a, d                ; a*=3
+        add a, a
 
         add a, 8
         add a, c
@@ -797,59 +898,59 @@ pix_addr:
 pattern_base:
         db %00000000
         db %00000000
-        db %00000011
-        db %00001100
-        db %00110000
-        db %00101100
-        db %00100011
-        db %00100000
+        db %00000000
+        db %00000000
+        db %00000001
+        db %00000010
+        db %00000100
+        db %00001000
 
         db %00000000
         db %00000000
-        db %11000000
-        db %00110000
-        db %00001100
-        db %00110100
-        db %11000100
-        db %10000100
+        db %00000000
+        db %00000000
+        db %10000000
+        db %01000000
+        db %00100000
+        db %00010000
 
-        db %00100000
-        db %00100000
-        db %00100000
-        db %00110000
-        db %00001100
-        db %00000011
+        db %00001000
+        db %00000100
+        db %00000010
+        db %00000001
+        db %00000000
+        db %00000000
         db %00000000
         db %00000000
 
-        db %10000100
-        db %10000100
-        db %10000100
-        db %10001100
-        db %10110000
-        db %11000000
+        db %00010000
+        db %00100000
+        db %01000000
+        db %10000000
+        db %00000000
+        db %00000000
         db %00000000
         db %00000000
 pattern_one:
-        db %00000000
-        db %00000000
-        db %00110000
-        db %11000000
-        db %10000000
-        db %10000000
-        db %10000000
-        db %10000000
-
-        db %00000000
-        db %00000000
-        db %00000000
-        db %00000000
-        db %00000000
+        db %10001000
+        db %01001000
+        db %00101000
+        db %00011000
+        db %11111000
         db %00000000
         db %00000000
         db %00000000
 
-        db %01000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+
+        db %00000000
         db %00000000
         db %00000000
         db %00000000
@@ -878,14 +979,14 @@ pattern_two:
         db %00000000
         db %00000000
 
+        db %00010001
+        db %00010010
+        db %00010100
+        db %00011000
+        db %00011111
         db %00000000
         db %00000000
-        db %00000110
-        db %00001001
-        db %00000011
-        db %00000001
-        db %00000001
-        db %00000010
+        db %00000000
 
         db %00000000
         db %00000000
@@ -913,25 +1014,25 @@ pattern_three:
         db %00000000
         db %00000000
         db %00000000
-        db %00011000
+        db %00000000
+
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
 
         db %00000000
         db %00000000
         db %00000000
-        db %00000000
-        db %00000000
-        db %00000000
-        db %00000000
-        db %00000000
-
-        db %01100110
-        db %10011010
-        db %01100010
-        db %00100010
-        db %00100110
+        db %11111000
         db %00011000
-        db %00000000
-        db %00000000
+        db %00101000
+        db %01001000
+        db %10001000
 
         db %00000000
         db %00000000
@@ -958,7 +1059,71 @@ pattern_four:
         db %00000000
         db %00000000
         db %00000000
-        db %00001100
+        db %00000000
+
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00011111
+        db %00011000
+        db %00010100
+        db %00010010
+        db %00010001
+pattern_thresh_clear:
+        db %11111111
+        db %11111111
+        db %11111111
+        db %11111111
+        db %11111111
+        db %11111110
+        db %11111100
+        db %11111000
+
+        db %11111111
+        db %11111111
+        db %11111111
+        db %11111111
+        db %11111111
+        db %01111111
+        db %00111111
+        db %00011111
+
+        db %11111000
+        db %11111100
+        db %11111110
+        db %11111111
+        db %11111111
+        db %11111111
+        db %11111111
+        db %11111111
+
+        db %00011111
+        db %00111111
+        db %01111111
+        db %11111111
+        db %11111111
+        db %11111111
+        db %11111111
+        db %11111111
+
+pattern_thresh0:
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
 
         db %00000000
         db %00000000
@@ -969,15 +1134,275 @@ pattern_four:
         db %00000000
         db %00000000
 
-        db %00110100
-        db %00100100
-        db %00100100
-        db %00101000
-        db %00110000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
         db %00000000
         db %00000000
         db %00000000
 
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+pattern_thresh1:
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %10000000
+        db %11000000
+        db %10000000
+
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+pattern_thresh2:
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %10000000
+        db %11000000
+        db %11100000
+
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+pattern_thresh3:
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %10000000
+        db %11000000
+        db %11100000
+
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+
+        db %11100000
+        db %01000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+pattern_thresh4:
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %10000000
+        db %11000000
+        db %11100000
+
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+
+        db %11100000
+        db %11000000
+        db %10000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+pattern_thresh5:
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %10000000
+        db %11000000
+        db %11100000
+
+        db %00000001
+        db %00000011
+        db %00000001
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+
+        db %11100000
+        db %11000000
+        db %10000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+pattern_thresh6:
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %10000000
+        db %11000000
+        db %11100000
+
+        db %00000111
+        db %00000011
+        db %00000001
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+
+        db %11100000
+        db %11000000
+        db %10000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+pattern_thresh7:
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000001
+        db %00000011
+        db %00000111
+
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %10000000
+        db %11000000
+        db %11100000
+
+        db %00000111
+        db %00000011
+        db %00000001
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+
+        db %11100000
+        db %11000000
+        db %10000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
+        db %00000000
 slub:
         db %00000011
         db %00000110
@@ -1075,6 +1500,25 @@ draw_char_2X2:
         pop bc
         ret
 
+draw_char_or_2X2:
+        push bc
+        call draw_char_or
+        pop bc
+        push bc
+        inc c
+        call draw_char_or
+        pop bc
+        push bc
+        inc b
+        call draw_char_or
+        pop bc
+        push bc
+        inc b
+        inc c
+        call draw_char_or
+        pop bc
+        ret
+
 draw_char_xor_2X2:
         push bc
         call draw_char_xor
@@ -1093,6 +1537,26 @@ draw_char_xor_2X2:
         call draw_char_xor
         pop bc
         ret
+
+draw_char_and_2X2:
+        push bc
+        call draw_char_and
+        pop bc
+        push bc
+        inc c
+        call draw_char_and
+        pop bc
+        push bc
+        inc b
+        call draw_char_and
+        pop bc
+        push bc
+        inc b
+        inc c
+        call draw_char_and
+        pop bc
+        ret
+
 
         ;; display hl at bc
 draw_char:
@@ -1119,6 +1583,33 @@ char0_xor:
         djnz char0_xor      ; repeat
         ret
 
+                ;; display hl at bc
+draw_char_or:
+        call chaddr         ; find screen address for char.
+        ld b,8              ; number of pixels high.
+char0_or:
+        ld a, (de)
+        or (hl)
+        ld (de),a           ; transfer to screen.
+        inc hl              ; next piece of data.
+        inc d               ; next pixel line.
+        djnz char0_or      ; repeat
+        ret
+
+
+        ;; display hl at bc
+draw_char_and:
+        call chaddr         ; find screen address for char.
+        ld b,8              ; number of pixels high.
+char0_and:
+        ld a, (de)
+        and (hl)
+        ld (de),a           ; transfer to screen.
+        inc hl              ; next piece of data.
+        inc d               ; next pixel line.
+        djnz char0_and      ; repeat
+        ret
+
 draw_byte:                  ; with bc = xy, h=bitmap byte
         call chaddr         ; find screen address for char.
         ld a, h
@@ -1134,6 +1625,7 @@ stretch_loop:
         inc d
         djnz stretch_loop
         ret
+
 
 
 ;; bc -> de
