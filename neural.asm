@@ -18,9 +18,8 @@
 ;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 		brain_base equ 28600
-        brain_size equ 32
+        brain_size equ 48
         neuron_size equ 13
-        brain_mask equ %00011111
         input_neuron1 equ brain_base+(neuron_size*7)
         input_neuron2 equ brain_base+(neuron_size*31)
         weave_end equ 800h
@@ -62,7 +61,6 @@ clk_end:
         ld a, (clock1)
         ld (input_neuron2), a
 
-        call draw_neurons
 
         call brain_think
         ld a, (brain_base)
@@ -89,15 +87,12 @@ clk_end:
         ld (hl), a
 
 
-        ld a, r
-        rr a
-        rr a
-        and %00011000
-
-
+        ld a, (clock1)
+        and %00001111
         jp z, input_stuff
         jp loop
 input_stuff:
+        call draw_neurons
         call draw_cursor
         call do_input
         call draw_cursor
@@ -142,7 +137,8 @@ select_cursor:
         ld a, (cursor_y)
         sla a
         sla a
-        sla a                   ; quotient 8
+        sla a
+        sla a                   ; quotient 16
         ld b, a
         ld a, (cursor_x)
         add a, b
@@ -404,20 +400,20 @@ loop_draw_neurons:
 
 iso_move_tr:
         ld a, b
-        add a, -1
-        and %00000111
-        ld b, a
-        and %00000001
+        add a, -1               ; take one away from x
+        and %00001111           ; modulo 8
+        ld b, a                 ; set x
+        and %00000001           ; every other column
         ret z
-        ld a, c
-        add a, 1
-        and %00000011
-        ld c, a
+        ld a, c                 ; load y
+        add a, 1                ; add one
+        and %00000011           ; modulo 4
+        ld c, a                 ; set y
         ret
 iso_move_bl:
         ld a, b
         add a, 1
-        and %00000111
+        and %00001111
         ld b, a
         and %00000001
         ret nz
@@ -430,7 +426,7 @@ iso_move_bl:
 iso_move_tl:
         ld a, b
         add a, 1
-        and %00000111
+        and %00001111
         ld b, a
         and %00000001
         ret z
@@ -443,7 +439,7 @@ iso_move_tl:
 iso_move_br:
         ld a, b
         add a, -1
-        and %00000111
+        and %00001111
         ld b, a
         and %00000001
         ret nz
@@ -590,7 +586,7 @@ init_neuron:
 
         ;; tl
         ld a, b
-        add a, 9
+        add a, 17
         call index_to_addr
         ld (ix+2), l            ; connection 1
         ld (ix+3), h            ; connection 1
@@ -611,7 +607,7 @@ init_neuron:
 
         ;; tr
         ld a, b
-        add a, 7
+        add a, 15
         call index_to_addr
         ld (ix+8), l            ; connection 4
         ld (ix+9), h            ; connection 4
@@ -629,14 +625,14 @@ init_alternate:
 
         ;; bl
         ld a, b
-        add a, -7
+        add a, -15
         call index_to_addr
         ld (ix+4), l            ; connection 2
         ld (ix+5), h            ; connection 2
 
         ;; br
         ld a, b
-        add a, -9
+        add a, -17
         call index_to_addr
         ld (ix+6), l            ; connection 3
         ld (ix+7), h            ; connection 3
@@ -661,11 +657,11 @@ init_end:
         ;; b should contain loop count
         ld a, b
         dec a
-        and %00000111           ; mod 8
+        and %00001111           ; mod 8
 
         add a, a
 
-        add a, 8
+
         ld (ix+10), a           ; set x
 
 
@@ -673,12 +669,13 @@ init_end:
         dec a
         sra a
         sra a
+        sra a
         sra a                   ; quotient 4
 
         add a, a
         add a, a
 
-        add a, 8
+        add a, 10
         add a, c
         ld (ix+11), a
 
